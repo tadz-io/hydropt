@@ -6,7 +6,7 @@ setup(name='hydropt',
       url='',
       author='',
       author_email='',
-      license=',
+      license='',
       packages=['hydropt'],
       install_requires=[
           'numpy',
