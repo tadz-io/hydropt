@@ -12,5 +12,5 @@ setup(name='hydropt',
           'numpy',
           'pandas',
           'matplotlib',
-          'sklearn'],
+          'scikit-learn'],
       zip_safe=False)
