@@ -9,7 +9,7 @@ setup(name='hydropt',
       license='',
       packages=['hydropt'],
       package_dir={'hydropt':'hydropt'},
-      package_data={'': ['*.csv']},
+      package_data={'hydropt': ['data/*.csv']},
       install_requires=[
           'numpy',
           'pandas',
