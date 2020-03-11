@@ -1,8 +1,13 @@
 import numpy as np
 import pandas as pd
+import pkg_resources
 import collections
 import matplotlib.pyplot as plt
 from sklearn.preprocessing import PolynomialFeatures
+
+DATA_PATH = pkg_resources.resource_filename('hydropt', 'data/')
+PHYTO_SIOP = pkg_resources.resource_filename('hydropt', 'data/phyto_siop.csv')
+PACE_POLYNOM_05 = pkg_resources.resource_filename('hydropt', 'data/PACE_polynom_05.csv')
 
 OLCI_WBANDS = np.array([400,412.5,442.5,490,510,560,620,665,673.75,681.25,708.75])
 HSI_WBANDS = np.arange(400, 711, 5)
@@ -66,7 +71,7 @@ def phyto(*args):
     basis vector - according to Ciotti&Cullen 2002
     '''
     # load phytoplankton basis vector
-    a_phyto_base = pd.read_csv('./data/phyto_siop.csv', sep=';', index_col=0)
+    a_phyto_base = pd.read_csv(PHYTO_SIOP, sep=';', index_col=0)
     # interpolate to OLCI wavebands
     a_phyto_base = interpolate_to_wavebands(data=a_phyto_base, wavelength=WBANDS)
     # remove negative absorption values and set to 0
@@ -159,7 +164,7 @@ class Hydropt:
         self.set_model_coef()
         
     def set_model_coef(self):
-        model_coef = pd.read_csv('./data/PACE_polynom_05.csv', index_col = 0)
+        model_coef = pd.read_csv(PACE_POLYNOM_05, index_col = 0)
         # check if wavebands match
         if np.array_equal(model_coef.index, self.iop_model._wavebands):
             self.model_coef = model_coef
