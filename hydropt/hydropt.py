@@ -66,7 +66,7 @@ def phyto(*args):
     basis vector - according to Ciotti&Cullen 2002
     '''
     # load phytoplankton basis vector
-    a_phyto_base = pd.read_csv('./hydropt/data/phyto_siop.csv', sep=';', index_col=0)
+    a_phyto_base = pd.read_csv('./data/phyto_siop.csv', sep=';', index_col=0)
     # interpolate to OLCI wavebands
     a_phyto_base = interpolate_to_wavebands(data=a_phyto_base, wavelength=WBANDS)
     # remove negative absorption values and set to 0
@@ -159,7 +159,7 @@ class Hydropt:
         self.set_model_coef()
         
     def set_model_coef(self):
-        model_coef = pd.read_csv('./hydropt/data/PACE_polynom_05.csv', index_col = 0)
+        model_coef = pd.read_csv('./data/PACE_polynom_05.csv', index_col = 0)
         # check if wavebands match
         if np.array_equal(model_coef.index, self.iop_model._wavebands):
             self.model_coef = model_coef
