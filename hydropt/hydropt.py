@@ -113,7 +113,7 @@ class IOP_model:
     def get_gradient(self, **kwargs):
         grads = []
         for k, value in kwargs.items():
-            grads.append(self.iop_model.get(k)(value)[1]())
+            grads.append([self.iop_model.get(k)(value)[1]()])
         
         grads = np.vstack(grads)
         
