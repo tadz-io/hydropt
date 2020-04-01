@@ -30,34 +30,34 @@ def interpolate_to_wavebands(data, wavelength, index='wavelength'):
     
     return data
 
-def nap(*args):
+def nap(*args, wb):
     '''
     IOP model for NAP
     '''
     # vectorized
-    def iop(spm=args):
-        return spm*np.array([(.041*.75*np.exp(-.0123*(WBANDS-443))), .014*0.57*(550/WBANDS)])
+    def iop(spm=args[0]):
+        return spm*np.array([(.041*.75*np.exp(-.0123*(wb-443))), .014*0.57*(550/wb)])
     
     def gradient():
-        d_a = .03075*np.exp(-.0123*(WBANDS-443))
-        d_b = .014*0.57*(550/WBANDS)
+        d_a = .03075*np.exp(-.0123*(wb-443))
+        d_b = .014*0.57*(550/wb)
         
         return np.array([d_a, d_b])
     
     return iop, gradient
 
-def cdom(*args):
+def cdom(*args, wb):
     '''
     IOP model for CDOM
     '''
-    def iop(a_440=args):
-        return np.array([a_440*np.exp(-0.017*(WBANDS-440)), np.zeros(len(WBANDS))])
+    def iop(a_440=args[0]):
+        return np.array([a_440*np.exp(-0.017*(wb-440)), np.zeros(len(wb))])
     
     def gradient():
         '''
         Gradient of CDOM IOP model
         ''' 
-        d_a = np.exp(-.017*(WBANDS-440))
+        d_a = np.exp(-.017*(wb-440))
         d_b = np.zeros(len(d_a))
         
         return np.array([d_a, d_b])
