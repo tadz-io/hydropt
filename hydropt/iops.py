@@ -5,6 +5,7 @@ import matplotlib.pyplot as plt
 
 DATA_PATH = pkg_resources.resource_filename('hydropt', 'data/')
 PHYTO_SIOP = pkg_resources.resource_filename('hydropt', 'data/phyto_siop.csv')
+PHYTO_SC_SIOP = pkg_resources.resource_filename('hydropt', 'data/psc_absorption_se_uitz_2008.csv')
 
 OLCI_WBANDS = np.array([400,412.5,442.5,490,510,560,620,665,673.75,681.25,708.75])
 HSI_WBANDS = np.arange(400, 711, 5)
@@ -35,8 +36,27 @@ def waveband_wrapper(f, wb):
 
 # load phytoplankton basis vector
 a_phyto_base_full = pd.read_csv(PHYTO_SIOP, sep=';', index_col=0)
+# load phytoplankton size class basis vectors (pico, nano, micro)
+a_psc_base_full = pd.read_csv(PHYTO_SC_SIOP)
 # interpolate to hyperspectral wavebands
 a_phyto_base_HSI = interpolate_to_wavebands(data=a_phyto_base_full, wavelength=HSI_WBANDS)
+
+pico_siop = a_psc_base_full[['wavelength','pico', 'pico_se']]
+pico_siop.set_index('wavelength', inplace=True)
+
+nano_siop = a_psc_base_full[['wavelength','nano', 'nano_se']]
+nano_siop.set_index('wavelength', inplace=True)
+
+micro_siop = a_psc_base_full[['wavelength','micro', 'micro_se']]
+micro_siop.set_index('wavelength', inplace=True)
+# set absorption and std to 0 for 710 nm
+pico_siop.loc[710,:] = [0,0]
+nano_siop.loc[710,:] = [0,0]
+micro_siop.loc[710,:] = [0,0]
+
+a_pico_base_OLCI = interpolate_to_wavebands(data=pico_siop, wavelength=OLCI_WBANDS)
+a_nano_base_OLCI = interpolate_to_wavebands(data=nano_siop, wavelength=OLCI_WBANDS)
+a_micro_base_OLCI = interpolate_to_wavebands(data=micro_siop, wavelength=OLCI_WBANDS)
 
 def nap(*args, wb):
     '''
@@ -48,9 +68,9 @@ def nap(*args, wb):
     
     def gradient():
         d_a = .03075*np.exp(-.0123*(wb-443))
-        d_b = .014*0.57*(550/wb)
+        d_bb = .014*0.57*(550/wb)
         
-        return np.array([d_a, d_b])
+        return np.array([d_a, d_bb])
     
     return iop, gradient
 
@@ -66,9 +86,9 @@ def cdom(*args, wb):
         Gradient of CDOM IOP model
         ''' 
         d_a = np.exp(-.017*(wb-440))
-        d_b = np.zeros(len(d_a))
+        d_bb = np.zeros(len(d_a))
         
-        return np.array([d_a, d_b])
+        return np.array([d_a, d_bb])
     
     return iop, gradient
 
@@ -83,13 +103,67 @@ def phyto(*args):
         a = 0.06*np.power(chl, .65)*a_phyto_base_HSI.absorption.values
         # calculate backscatter according to 0.1-tadzio-IOP_backscatter
         # notebook in hydropt-4-sent3
-        b = np.repeat(.014*0.18*np.power(chl, .471), len(a))
+        bb = np.repeat(.014*0.18*np.power(chl, .471), len(a))
         
-        return np.array([a, b])
+        return np.array([a, bb])
     
     def gradient():
         '''dummy gradient function'''
         return np.zeros([2,63])
+    
+    return iop, gradient
+
+def pico(*args):
+    '''
+    pico IOP model
+    
+    chl - concentration in mg/m3
+    '''
+    def iop(chl=args[0]):
+        # chl specific absorption 
+        a_star = a_pico_base_OLCI['pico'].values
+        bb_star = .0038*(OLCI_WBANDS/470)**-1.4
+
+        return chl*np.array([a_star.reshape(-1), bb_star])
+    
+    def gradient():
+        return None
+    
+    return iop, gradient
+
+def nano(*args):
+    '''
+    nano IOP model
+    
+    chl - concentration in mg/m3
+    '''
+    def iop(chl=args[0]):
+        # chl specific absorption 
+        a_star = a_nano_base_OLCI['nano'].values
+        bb_star = .0038*(OLCI_WBANDS/470)**-1.4
+
+        return chl*np.array([a_star.reshape(-1), bb_star])
+
+    def gradient():
+        return None
+    
+    return iop, gradient
+
+def micro(*args):
+    '''
+    micro IOP model
+    
+    chl - concentration in mg/m3
+    '''
+    def iop(chl=args[0]):
+        # chl specific absorption 
+        a_star = a_micro_base_OLCI['micro'].values
+        bb_star = .0004*(OLCI_WBANDS/470)**.4
+
+        return chl*np.array([a_star.reshape(-1), bb_star])
+    
+    def gradient():
+        return None
     
     return iop, gradient
 
@@ -131,13 +205,14 @@ class IOP_model:
         fig, axs = plt.subplots(1,n, figsize=(14,4))
         # clean-up loop code
         for (k,v), ax in zip(kwargs.items(), axs):
-            ax2 = ax.twinx()
-            ax.plot(self._wavebands, self.get_iop(**{k:v})[0][0])
-            ax.set_xlabel('wavelength')
-            ax.set_ylabel('absorption')
-            ax.set_title(k)
-            ax2.plot(self._wavebands, self.get_iop(**{k:v})[0][1], color='blue')
-            ax2.set_ylabel('backscatter')
+            #ax2 = ax.twinx()
+            ax.plot(self._wavebands, self.get_iop(**{k:v})[0][0], label='absorption')
+            ax.plot(self._wavebands, self.get_iop(**{k:v})[0][1], label='backscatter')
+            ax.set_xlabel('wavelength (nm)')
+            ax.set_ylabel('IOP ($m^{-1}$)')
+            ax.set_title(k)     
+            ax.legend()
+            #ax2.set_ylabel('backscatter')
         plt.tight_layout()
         #return fig
         
@@ -160,3 +235,17 @@ class ThreeCompModel(IOP_model):
                      nap=waveband_wrapper(nap, wb=HSI_WBANDS),
                      cdom=waveband_wrapper(cdom, wb=HSI_WBANDS),
                      chl=phyto)
+        
+class FiveCompModel(IOP_model):
+    ''' 
+    5 component IOP model:
+    
+    cdom, nap, pico, nano , micro
+    '''
+    def __init__(self):
+        self.set_iop(OLCI_WBANDS,
+                    nap=waveband_wrapper(nap, wb=OLCI_WBANDS),
+                    cdom=waveband_wrapper(cdom, wb=OLCI_WBANDS),
+                    pico=pico,
+                    nano=nano,
+                    micro=micro)
