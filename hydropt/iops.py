@@ -3,6 +3,10 @@ import pandas as pd
 import pkg_resources
 import matplotlib.pyplot as plt
 
+# TO DO
+# - cache function for interpolation of phytoplankton IOPs
+# - cleanup code phyto iop models
+
 DATA_PATH = pkg_resources.resource_filename('hydropt', 'data/')
 PHYTO_SIOP = pkg_resources.resource_filename('hydropt', 'data/phyto_siop.csv')
 PHYTO_SC_SIOP = pkg_resources.resource_filename('hydropt', 'data/psc_absorption_se_uitz_2008.csv')
@@ -40,6 +44,7 @@ a_phyto_base_full = pd.read_csv(PHYTO_SIOP, sep=';', index_col=0)
 a_psc_base_full = pd.read_csv(PHYTO_SC_SIOP)
 # interpolate to hyperspectral wavebands
 a_phyto_base_HSI = interpolate_to_wavebands(data=a_phyto_base_full, wavelength=HSI_WBANDS)
+a_phyto_base_OLCI = interpolate_to_wavebands(data=a_phyto_base_full, wavelength=OLCI_WBANDS)
 
 pico_siop = a_psc_base_full[['wavelength','pico', 'pico_se']]
 pico_siop.set_index('wavelength', inplace=True)
@@ -110,6 +115,27 @@ def phyto(*args):
     def gradient():
         '''dummy gradient function'''
         return np.zeros([2,63])
+    
+    return iop, gradient
+
+def phyto_olci(*args):
+    '''
+    IOP model for phytoplankton w. 
+    packaging effect - according to Prieur&Sathyenadrath (1981)
+    basis vector - according to Ciotti&Cullen 2002
+    '''   
+    def iop(chl=args[0]):
+        # calculate absorption
+        a = 0.06*np.power(chl, .65)*a_phyto_base_OLCI.absorption.values
+        # calculate backscatter according to 0.1-tadzio-IOP_backscatter
+        # notebook in hydropt-4-sent3
+        bb = np.repeat(.014*0.18*np.power(chl, .471), len(a))
+        
+        return np.array([a, bb])
+    
+    def gradient():
+        '''dummy gradient function'''
+        return np.zeros([2,11])
     
     return iop, gradient
 
@@ -203,16 +229,16 @@ class IOP_model:
     def plot(self, **kwargs):
         n = len(kwargs)
         fig, axs = plt.subplots(1,n, figsize=(14,4))
-        # clean-up loop code
+        # to do: clean-up loop code
+        # pass kwargs to plt.plot
         for (k,v), ax in zip(kwargs.items(), axs):
-            #ax2 = ax.twinx()
             ax.plot(self._wavebands, self.get_iop(**{k:v})[0][0], label='absorption')
             ax.plot(self._wavebands, self.get_iop(**{k:v})[0][1], label='backscatter')
             ax.set_xlabel('wavelength (nm)')
             ax.set_ylabel('IOP ($m^{-1}$)')
             ax.set_title(k)     
             ax.legend()
-            #ax2.set_ylabel('backscatter')
+
         plt.tight_layout()
         #return fig
         
@@ -249,3 +275,10 @@ class FiveCompModel(IOP_model):
                     pico=pico,
                     nano=nano,
                     micro=micro)
+        
+class ThreeCompModel_OLCI(IOP_model):
+    def __init__(self):
+        self.set_iop(OLCI_WBANDS,
+                     nap=waveband_wrapper(nap, wb=OLCI_WBANDS),
+                     cdom=waveband_wrapper(cdom, wb=OLCI_WBANDS),
+                     chl=phyto_olci)
