@@ -2,10 +2,22 @@ import numpy as np
 import warnings
 import pandas as pd
 import pkg_resources
+from iops import IOP_model
+from abc import ABC, abstractmethod
 from sklearn.preprocessing import PolynomialFeatures
 
-# TO DO:
+''' TO DO:
 # - move model coefficients to XML/JSON file and include bounds                                     
+# - to use jax/autograd replace sklearn PolynomialFeatures with:
+    
+    def _polynomial_features(self, x):
+        x = x.T
+        f = np.array([(x[0]**i)*(x[1]**j) for (i,j) in self.model_powers]).T
+
+        return f
+'''
+
+
 
 PACE_POLYNOM_05 = pkg_resources.resource_filename('hydropt', 'data/PACE_polynom_05.csv')
 OLCI_POLYNOM_04 = pkg_resources.resource_filename('hydropt', 'data/OLCI_polynom_04.csv')
@@ -22,6 +34,47 @@ OLCI_IOP_UPPER_BOUNDS = np.array([
      0.88938,  0.60752,  0.61013,  0.5411, 0.25358],
     [1.1124494 , 1.07913107, 1.00683935, 0.91048153, 0.8752799, 0.79827772,
      0.72226766, 0.67426263, 0.66567271, 0.65848531, 0.63343398]])
+
+class WavebandError(ValueError):
+    pass
+
+class ForwardModel(ABC):
+    def __init__(self, iop_model):
+        self.iop_model = iop_model
+
+    @property
+    def iop_model(self):
+        return self.__iop_model
+
+    @iop_model.setter
+    def iop_model(self, m):
+        if isinstance(m, IOP_model):
+            self.__iop_model = m
+        else:
+            raise ValueError('m should be IOP_model instance')
+    
+    def forward(self, comp_conc):
+        # calculate (and validate) IOPs
+        iops = self.iop_model(comp_conc)
+        self.validate_iops(iops)
+        # calculate rrs and interpolate
+        self._current_rrs = self.forward_model(iops)
+        self.interpolate(rrs)(self.iop_model._wavebands)
+        self._current_iops = iops
+
+        return self._current_rrs
+
+    @abstractmethod
+    def forward_model(self, iop):
+        '''Called by forward() to calculate Rrs from IOPs'''
+        pass
+
+    def interpolate()
+
+    def validate_iops(self, iops):
+        '''hook to check if IOPs exceed bounds'''
+        pass
+
 
 class Hydropt:
     def __init__(self, iop_model):
