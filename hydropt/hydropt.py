@@ -1,6 +1,7 @@
 import numpy as np
 import warnings
 import pandas as pd
+from xarray import DataArray
 import pkg_resources
 from iops import IOP_model
 from abc import ABC, abstractmethod
@@ -18,9 +19,11 @@ from sklearn.preprocessing import PolynomialFeatures
 '''
 
 
+# PACE_POLYNOM_05 = pkg_resources.resource_filename('hydropt', 'data/PACE_polynom_05.csv')
+# OLCI_POLYNOM_04 = pkg_resources.resource_filename('hydropt', 'data/OLCI_polynom_04.csv')
 
-PACE_POLYNOM_05 = pkg_resources.resource_filename('hydropt', 'data/PACE_polynom_05.csv')
-OLCI_POLYNOM_04 = pkg_resources.resource_filename('hydropt', 'data/OLCI_polynom_04.csv')
+PACE_POLYNOM_05 = pd.read_csv('/Users/tadzio/Documents/code_repo/hydropt_4_sent3/data/processed/model_coefficients/PACE_polynom_05.csv', 
+index_col=0)
 
 # set lower limits for IOP per waveband
 OLCI_IOP_LOWER_BOUNDS = np.array([   
@@ -38,9 +41,65 @@ OLCI_IOP_UPPER_BOUNDS = np.array([
 class WavebandError(ValueError):
     pass
 
-class ForwardModel(ABC):
-    def __init__(self, iop_model):
+''' Abstract base classes
+
+Definition of all abstract base classes
+
+ForwardModel: model to calculate Rrs from IOPs
+'''
+
+class ReflectanceModel(ABC):
+    ''' 
+    rename ForwardModel -> ReflectanceModel
+    '''
+    @property
+    @abstractmethod
+    def _parameters(self):
+        '''
+        parameters
+        could use xarray's data-arrays here with coords
+        and inteprolation functionality
+        '''
+        pass
+
+    @_parameters.setter
+    @abstractmethod
+    def _parameters(self, x):
+        pass
+
+    @property
+    @abstractmethod
+    def _domain(self):
+        pass
+    
+    def interpolate(self, **kwargs):
+        self._parameters = self._parameters.interp(**kwargs)
+            
+    @abstractmethod
+    def forward(self, x):
+        pass
+
+    @abstractmethod
+    def gradient(self):
+        pass
+    
+    def plot(self):
+        pass
+
+''' Context classes
+
+ForwardModel: ...
+'''
+
+class ForwardModel:
+    '''
+    BioOpticalModel -> ForwardModel
+    '''
+    def __init__(self, iop_model, refl_model):
         self.iop_model = iop_model
+        self.refl_model = refl_model
+        self.__cache = True
+        self._method = 'linear'
 
     @property
     def iop_model(self):
@@ -48,32 +107,72 @@ class ForwardModel(ABC):
 
     @iop_model.setter
     def iop_model(self, m):
-        if isinstance(m, IOP_model):
-            self.__iop_model = m
-        else:
-            raise ValueError('m should be IOP_model instance')
+        self.__iop_model = m
+        self.__cache = True
+
+    @property
+    def refl_model(self):
+        if self.__cache:
+            self.interpolate()
+            self.__cache = False
+        
+        return self.__refl_model
+
+    @refl_model.setter
+    def refl_model(self, m):
+        self.__refl_model = m
+        self.__cache = True
+
+    def interpolate(self):
+        # for now we assume first dimension is axis for interpolation
+        dim_name = self.refl_model.parameters.coords.dims[0]
+        kwargs = {
+            dim_name: self.iop_model.wavebands,
+            'method': self._method}
+        
+        self.refl_model.interpolate(**kwargs)
+
+    def forward(self):
+        pass
+
+class PolynomialReflectance(ReflectanceModel):
+    # use 5th order polynomial coefficients for PACE
+    _parameters = DataArray(PACE_POLYNOM_05)
+    # still have to set domain
+    _domain = None
+    gradient = None
+
+    def forward(self, x):
+        c = self._parameters
+        x = np.log(x)
+        # get polynomial features
+        ft = PolynomialFeatures(degree=5).fit_transform(x.T)
+        # calculate log(Rrs)
+        log_rrs = np.dot(c, ft.T).diagonal()
+
+        return np.exp(log_rrs)
+
+POLYNOMIAL_REFLECTANCE_MODEL = PolynomialReflectance()
+
+class PolynomialForward(ForwardModel):
+    def __init__(self, iop_model):
+        super().__init__(iop_model, POLYNOMIAL_REFLECTANCE_MODEL)
     
-    def forward(self, comp_conc):
-        # calculate (and validate) IOPs
-        iops = self.iop_model(comp_conc)
-        self.validate_iops(iops)
-        # calculate rrs and interpolate
-        self._current_rrs = self.forward_model(iops)
-        self.interpolate(rrs)(self.iop_model._wavebands)
-        self._current_iops = iops
 
-        return self._current_rrs
-
-    @abstractmethod
-    def forward_model(self, iop):
-        '''Called by forward() to calculate Rrs from IOPs'''
+class InversionModel:
+    def __init__(self, fwd_model, minimizer):
         pass
+    
+# def forward(self, comp_conc):
+#     # calculate (and validate) IOPs
+#     iops = self.iop_model(comp_conc)
+#     self.validate_iops(iops)
+#     # calculate rrs and interpolate
+#     self._current_rrs = self.forward_model(iops)
+#     self.interpolate(rrs)(self.iop_model._wavebands)
+#     self._current_iops = iops
 
-    def interpolate()
-
-    def validate_iops(self, iops):
-        '''hook to check if IOPs exceed bounds'''
-        pass
+#     return self._current_rrs
 
 
 class Hydropt:
