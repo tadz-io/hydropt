@@ -11,7 +11,7 @@ DATA_PATH = pkg_resources.resource_filename('hydropt', 'data/')
 PHYTO_SIOP = pkg_resources.resource_filename('hydropt', 'data/phyto_siop.csv')
 PHYTO_SC_SIOP = pkg_resources.resource_filename('hydropt', 'data/psc_absorption_se_uitz_2008.csv')
 
-OLCI_WBANDS = np.array([400,412.5,442.5,490,510,560,620,665,673.75,681.25,708.75])
+OLCI_WBANDS = np.array([400, 412.5, 442.5, 490, 510, 560, 620, 665, 673.75, 681.25, 708.75])
 HSI_WBANDS = np.arange(400, 711, 5)
 WBANDS = HSI_WBANDS
 
@@ -23,13 +23,13 @@ def interpolate_to_wavebands(data, wavelength, index='wavelength'):
     data.reset_index(inplace=True)
     # add OLCI/MERIS wavebands to phytop SIOP wavelengths
     wband_merge = np.unique(sorted(np.append(data[index], wavelength)))
-    
+
     data.set_index(index, inplace=True)
     data = data.reindex(wband_merge)\
         .astype(float)\
         .interpolate(method='slinear', fill_value=0, limit_direction='both')\
         .reindex(wavelength)
-    
+
     return data
 
 def waveband_wrapper(f, wb):
@@ -198,10 +198,14 @@ class IOP_model:
         self._wavebands = None
         self.iop_model = None
     
+    @property
+    def wavebands(self):
+        return self._wavebands
+
     def set_iop(self, wavebands, **kwargs):
         if self.check_wavelen(wavebands, **kwargs):
             self._wavebands = wavebands
-            self.iop_model = {k: v for (k,v) in kwargs.items()}
+            self.iop_model = {k: v for (k, v) in kwargs.items()}
     
     def get_iop(self, **kwargs):
         iops = []
@@ -211,7 +215,7 @@ class IOP_model:
         iops = np.vstack(iops)
         
         return iops
-   
+
     def get_gradient(self, **kwargs):
         grads = []
         for k, value in kwargs.items():
