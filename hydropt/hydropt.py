@@ -2,6 +2,7 @@ import numpy as np
 import warnings
 import pandas as pd
 from xarray import DataArray
+import types
 #import pkg_resources
 #from .iops import IOP_model
 from abc import ABC, abstractmethod
@@ -24,6 +25,31 @@ from sklearn.preprocessing import PolynomialFeatures
 
 PACE_POLYNOM_05 = pd.read_csv('/Users/tadzio/Documents/code_repo/hydropt_4_sent3/data/processed/model_coefficients/PACE_polynom_05.csv', index_col=0)
 
+class Interpolator:
+    '''
+    see descriptors: 
+    https://stackoverflow.com/questions/55511445/how-to-pass-self-to-a-method-like-object-in-python
+    '''
+    def __init__(self, dims, method='linear'):
+        self.dims = dims
+        self.method = method
+
+    def interpolate(self, da, xnew):
+        return da.interp(**{self.dims: xnew}, method=self.method)
+
+    def __call__(self, _instance, xnew):
+        instance = _instance.__class__()
+        # copy attributes
+        instance.__dict__.update(_instance.__dict__)
+        # replace _parameters w. interpolated values
+        setattr(instance, '_parameters', self.interpolate(instance._parameters, xnew))
+
+        return instance
+
+    def __get__(self, instance, owner):
+        return types.MethodType(self, instance) if instance else self
+        
+
 class WavebandError(ValueError):
     pass
 
@@ -44,7 +70,7 @@ class ReflectanceModel(ABC):
         pass
     
     @abstractmethod
-    def __call__(self):
+    def interpolate(self, xnew):
         '''return: instance of class'''
             
     @abstractmethod
@@ -71,6 +97,7 @@ class ForwardModel:
         self.iop_model = iop_model
         self.refl_model = refl_model
         self.__cache = True
+        # method does nothing yet -> pass to interpolate()
         self._method = 'linear'
 
     @property
@@ -92,8 +119,8 @@ class ForwardModel:
         self.__cache = True
     
     def forward(self, **x):
-        if self.__cache: 
-            self.refl_model = self.refl_model(self.iop_model.wavebands)
+        if self.__cache:
+            self.refl_model = self.refl_model.interpolate(self.iop_model.wavebands)
             self.__cache = False
             
         iops = self.iop_model.sum_iop(**x)
@@ -106,12 +133,9 @@ class ForwardModel:
 
 
 class PolynomialReflectance(ReflectanceModel):
-    def __init__(self, wavebands=None):
-        if wavebands is None:
-            self._parameters = DataArray(PACE_POLYNOM_05)
-        else:
-            self._parameters = DataArray(PACE_POLYNOM_05).interp(wavelength=wavebands)
 
+    _parameters = DataArray(PACE_POLYNOM_05)
+    interpolate = Interpolator(dims='wavelength')
     _domain = None
     gradient = None
 
@@ -124,17 +148,11 @@ class PolynomialReflectance(ReflectanceModel):
         log_rrs = np.dot(c, ft.T).diagonal()
 
         return np.exp(log_rrs)
-    
-    def __call__(self, xnew):
-        return self.__class__(xnew)
-
-POLYNOMIAL_REFLECTANCE_MODEL = PolynomialReflectance()
 
 class PolynomialForward(ForwardModel):
     def __init__(self, iop_model):
-        super().__init__(iop_model, POLYNOMIAL_REFLECTANCE_MODEL)
-    
-
+        super().__init__(iop_model, PolynomialReflectance())
+ 
 class InversionModel:
     def __init__(self, fwd_model, minimizer):
         pass
