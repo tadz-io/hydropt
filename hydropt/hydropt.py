@@ -152,75 +152,37 @@ class PolynomialReflectance(ReflectanceModel):
 class PolynomialForward(ForwardModel):
     def __init__(self, iop_model):
         super().__init__(iop_model, PolynomialReflectance())
+
+def diff(x, y, f):
+    return y - f(x)
+
+def l1_loss(x, y, f):
+    return np.abs(y - f(x))
+
+def l2_loss(x, y, f):
+    return (y - f(**x))**2
+
+def chi_squared(x, y, f, sigma):
+    return ((y - f(x))/sigma)**2
  
 class InversionModel:
-    def __init__(self, fwd_model, minimizer):
-        pass
-    
-# def forward(self, comp_conc):
-#     # calculate (and validate) IOPs
-#     iops = self.iop_model(comp_conc)
-#     self.validate_iops(iops)
-#     # calculate rrs and interpolate
-#     self._current_rrs = self.forward_model(iops)
-#     self.interpolate(rrs)(self.iop_model._wavebands)
-#     self._current_iops = iops
+    def __init__(self, fwd_model, minimizer, loss_function=l2_loss):
+        self._fwd_model = fwd_model
+        self._minimizer = minimizer
+        self._loss = loss_function
 
-#     return self._current_rrs
+    def invert(self, x, y):
+        ''' 
+        invert() should take *args (sigma etc..) and pass to _minimizer(args=...)
+        https://stackoverflow.com/questions/51883058/l1-norm-instead-of-l2-norm-for-cost-function-in-regression-model
+        '''
+        key, x0 = zip(*[(k,v) for (k, v) in x.items()])
+        loss_func = lambda x, y, f: self._loss(dict(zip(key, x)), y, f)
+        # to do: implement jac (scipy.optimize)/Dfun (lmfit)
+        xhat = self._minimizer(loss_func, x0, args=(y, self._fwd_model.forward), method='lm')
 
+        return xhat
 
-# class Hydropt:
-#     def __init__(self, iop_model):
-#         self.iop_model = iop_model
-#         self.model_coef = None
-#         self.model_powers = None
-#         self.set_model_coef()
-        
-#     def set_model_coef(self):
-#         model_coef = pd.read_csv(OLCI_POLYNOM_04, index_col = 0)
-#         # check if wavebands match
-#         if np.array_equal(model_coef.index, self.iop_model._wavebands):
-#             self.model_coef = model_coef
-#             self.model_powers = PolynomialFeatures(degree=4).fit([[1,1]]).powers_
-#         else:
-#             raise ValueError('wavebands do not match number of model coefficients')
-            
-#     def hydrolight_polynom(self, x, degree=4, ignore_warnings=False):
-#         '''
-#         Forward model using polynomial fit to Hydrolight simulations
-
-#         x[0]: total absorption at wavelength i
-#         x[1]: total backscatter at wavelength i
-
-#         returns Rrs
-#         '''
-#         # check if IOPs are outside of model bounds
-#         if not ignore_warnings:
-#             self._validate_iop_bounds(x)
-#         # log absorption, backscatter
-#         x_log = np.log(x)
-#         # get polynomial features
-#         ft = PolynomialFeatures(degree=degree).fit_transform(x_log.T)
-#         # get polynomial coefficients
-#         c = self.model_coef
-#         # calculate log(Rrs)
-#         log_rrs = np.dot(c, ft.T).diagonal()
-#         # calculate Rrs
-#         rrs = np.exp(log_rrs)
-
-#         return rrs
-    
-#     def _validate_iop_bounds(self, x):
-#         bounds_exceded = np.any([
-#             np.any(x<OLCI_IOP_LOWER_BOUNDS*.2),
-#             np.any(x>OLCI_IOP_UPPER_BOUNDS*1.1)])
-        
-#         if bounds_exceded:
-#             warnings.warn('''IOP(s) exceed bounds of polynomial model.
-#             Caution must be taken when extrapolating outside of bounds''')
-    
-#     def forward(self, ignore_warnings=False, **kwargs):
-#         # calculate total absorption/backscatter
-#         iop = self.iop_model.sum_iop(**kwargs)
-        
-#         return self.hydrolight_polynom(iop, ignore_warnings=ignore_warnings)
+    @property
+    def iop_model(self):
+        return self._fwd_model.iop_model.iop_model
