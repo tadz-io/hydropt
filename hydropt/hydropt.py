@@ -1,7 +1,7 @@
 import numpy as np
 import warnings
 import pandas as pd
-from xarray import DataArray
+from xarray import DataArray, Dataset
 import types
 #import pkg_resources
 #from .iops import IOP_model
@@ -135,8 +135,8 @@ class ForwardModel:
 class PolynomialReflectance(ReflectanceModel):
 
     _parameters = DataArray(PACE_POLYNOM_05)
-    interpolate = Interpolator(dims='wavelength')
     _domain = None
+    interpolate = Interpolator(dims='wavelength')
     gradient = None
 
     def forward(self, x):
@@ -153,33 +153,91 @@ class PolynomialForward(ForwardModel):
     def __init__(self, iop_model):
         super().__init__(iop_model, PolynomialReflectance())
 
-def diff(x, y, f):
-    return y - f(x)
 
-def l1_loss(x, y, f):
-    return np.abs(y - f(x))
+def _residual(x, y, f, w):
+    '''weighted residuals'''
+    
+    return (y - f(**x))/(1/np.sqrt(w))
 
-def l2_loss(x, y, f):
-    return (y - f(**x))**2
 
-def chi_squared(x, y, f, sigma):
-    return ((y - f(x))/sigma)**2
+class ValidationDataset:
+
+    def __init__(self, fwd_model):
+        self.fwd_model = fwd_model
+
+    def create(self, wt):
+        ''' create validation set
+
+        wt - str indicating watertype: c1, c2 etc..
+        '''
+
+        pass
+
+def _to_dataset(func):
+    '''
+    make this a validation set decorator
+
+    to do: take extra argument of observed concentration and calculate
+    rrs -> add noise -> invert using .invert() -> create validation set
+
+    let this function create the synthetic dataset and invert it -> return the validation set:
+    observed vs. predicted
+    '''
+    def wrapper(*args, **kwargs):
+        '''
+        m - InversionModel instance
+        x, y, w - see InversionModel
+        '''
+        stat_vars = ['chisqr', 'redchi', 'aic', 'bic']
+        fwd_model = args[0]._fwd_model.forward 
+        iop_model = args[0]._fwd_model.iop_model
+        # do inversion
+        out = func(*args, **kwargs)
+        # get estimates
+        x_hat = {i: float(j) for i,j in out.params.items()}
+        rrs_hat = fwd_model(**x_hat)
+        iop_hat = iop_model.get_iop(**x_hat)
+        # organize data in dict
+        data = {
+            'rrs': (['wavelength'], rrs_hat),
+            'iops': (['comp', 'iop', 'wavelength'], iop_hat),
+            'conc': (['comp'], [i for i in x_hat.values()]),
+            'weights': (['wavelength'], kwargs.get('w', np.repeat(1, len(rrs_hat))))}
+        # add stats
+        data.update({i: getattr(out, i) for i in stat_vars})   
+        # iop_hat = {k: v for k,v in zip(x_hat.keys(), iop_model.get_iop(**x_hat))}
+        coords = {
+            'wavelength': iop_model.wavebands,
+            'comp': [i for i in x_hat.keys()],
+            'iop': ['absorption', 'backscatter']}
+        
+        return Dataset(data, coords=coords)
+    
+    return wrapper
+
  
 class InversionModel:
-    def __init__(self, fwd_model, minimizer, loss_function=l2_loss):
+    def __init__(self, fwd_model, minimizer, loss=_residual):
         self._fwd_model = fwd_model
         self._minimizer = minimizer
-        self._loss = loss_function
+        self._loss = loss
 
-    def invert(self, x, y):
+    @_to_dataset
+    def invert(self, x, y, w=1):
         ''' 
-        invert() should take *args (sigma etc..) and pass to _minimizer(args=...)
+        x - initial guess
+        y - rrs to invert
+        w - weights to wavebands
+
+        decorate invert() to parse output to dict/DataFrame
+        specify decorater class during init or as property
         https://stackoverflow.com/questions/51883058/l1-norm-instead-of-l2-norm-for-cost-function-in-regression-model
         '''
-        key, x0 = zip(*[(k,v) for (k, v) in x.items()])
-        loss_func = lambda x, y, f: self._loss(dict(zip(key, x)), y, f)
+        key, x0 = zip(*[(k, float(v)) for (k, v) in x.items()])
+        #loss_func = lambda x, y, f: self._loss(dict(zip(key, x)), y, f, w)
+        loss_func = lambda x, y, f: self._loss(dict(x.valuesdict()), y, f, w)
         # to do: implement jac (scipy.optimize)/Dfun (lmfit)
-        xhat = self._minimizer(loss_func, x0, args=(y, self._fwd_model.forward), method='lm')
+        xhat = self._minimizer(loss_func, x, args=(y, self._fwd_model.forward))#, method='lm')
 
         return xhat
 
