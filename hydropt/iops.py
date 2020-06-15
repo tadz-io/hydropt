@@ -7,13 +7,16 @@ import matplotlib.pyplot as plt
 # - cache function for interpolation of phytoplankton IOPs
 # - cleanup code phyto iop models
 
-DATA_PATH = pkg_resources.resource_filename('hydropt', 'data/')
-PHYTO_SIOP = pkg_resources.resource_filename('hydropt', 'data/phyto_siop.csv')
-PHYTO_SC_SIOP = pkg_resources.resource_filename('hydropt', 'data/psc_absorption_se_uitz_2008.csv')
+# DATA_PATH = pkg_resources.resource_filename('hydropt', 'data/')
+# PHYTO_SIOP = pkg_resources.resource_filename('hydropt', 'data/phyto_siop.csv')
+# PHYTO_SC_SIOP = pkg_resources.resource_filename('hydropt', 'data/psc_absorption_se_uitz_2008.csv')
+
+PHYTO_SIOP = '/Users/tadzio/Documents/code_repo/hydropt/hydropt/data/phyto_siop.csv'
+PHYTO_SC_SIOP = '/Users/tadzio/Documents/code_repo/hydropt/hydropt/data/psc_absorption_se_uitz_2008.csv'
 
 OLCI_WBANDS = np.array([400, 412.5, 442.5, 490, 510, 560, 620, 665, 673.75, 681.25, 708.75])
 HSI_WBANDS = np.arange(400, 711, 5)
-WBANDS = HSI_WBANDS
+WBANDS = OLCI_WBANDS
 
 def interpolate_to_wavebands(data, wavelength, index='wavelength'):
     '''
@@ -59,9 +62,9 @@ pico_siop.loc[710,:] = [0,0]
 nano_siop.loc[710,:] = [0,0]
 micro_siop.loc[710,:] = [0,0]
 
-a_pico_base_OLCI = interpolate_to_wavebands(data=pico_siop, wavelength=OLCI_WBANDS)
-a_nano_base_OLCI = interpolate_to_wavebands(data=nano_siop, wavelength=OLCI_WBANDS)
-a_micro_base_OLCI = interpolate_to_wavebands(data=micro_siop, wavelength=OLCI_WBANDS)
+a_pico_base = interpolate_to_wavebands(data=pico_siop, wavelength=WBANDS)
+a_nano_base = interpolate_to_wavebands(data=nano_siop, wavelength=WBANDS)
+a_micro_base = interpolate_to_wavebands(data=micro_siop, wavelength=WBANDS)
 
 def nap(*args, wb):
     '''
@@ -147,8 +150,8 @@ def pico(*args):
     '''
     def iop(chl=args[0]):
         # chl specific absorption 
-        a_star = a_pico_base_OLCI['pico'].values
-        bb_star = .0038*(OLCI_WBANDS/470)**-1.4
+        a_star = a_pico_base['pico'].values
+        bb_star = .0038*(WBANDS/470)**-1.4
 
         return chl*np.array([a_star.reshape(-1), bb_star])
     
@@ -165,8 +168,8 @@ def nano(*args):
     '''
     def iop(chl=args[0]):
         # chl specific absorption 
-        a_star = a_nano_base_OLCI['nano'].values
-        bb_star = .0038*(OLCI_WBANDS/470)**-1.4
+        a_star = a_nano_base['nano'].values
+        bb_star = .0038*(WBANDS/470)**-1.4
 
         return chl*np.array([a_star.reshape(-1), bb_star])
 
@@ -183,8 +186,8 @@ def micro(*args):
     '''
     def iop(chl=args[0]):
         # chl specific absorption 
-        a_star = a_micro_base_OLCI['micro'].values
-        bb_star = .0004*(OLCI_WBANDS/470)**.4
+        a_star = a_micro_base['micro'].values
+        bb_star = .0004*(WBANDS/470)**.4
 
         return chl*np.array([a_star.reshape(-1), bb_star])
     
@@ -196,7 +199,7 @@ def micro(*args):
 class IOP_model:
     def __init__(self):
         self._wavebands = None
-        self.iop_model = None
+        self.iop_model = {}
     
     @property
     def wavebands(self):
@@ -205,7 +208,7 @@ class IOP_model:
     def set_iop(self, wavebands, **kwargs):
         if self.check_wavelen(wavebands, **kwargs):
             self._wavebands = wavebands
-            self.iop_model = {k: v for (k, v) in kwargs.items()}
+            self.iop_model.update({k: v for (k, v) in kwargs.items()})
     
     def get_iop(self, **kwargs):
         iops = []
@@ -232,7 +235,7 @@ class IOP_model:
     
     def plot(self, **kwargs):
         n = len(kwargs)
-        fig, axs = plt.subplots(1,n, figsize=(14,4))
+        fig, axs = plt.subplots(1,n, figsize=(14, 4))
         # to do: clean-up loop code
         # pass kwargs to plt.plot
         for (k,v), ax in zip(kwargs.items(), axs):
@@ -273,15 +276,17 @@ class FiveCompModel(IOP_model):
     cdom, nap, pico, nano , micro
     '''
     def __init__(self):
-        self.set_iop(OLCI_WBANDS,
-                    nap=waveband_wrapper(nap, wb=OLCI_WBANDS),
-                    cdom=waveband_wrapper(cdom, wb=OLCI_WBANDS),
+        super().__init__()
+        self.set_iop(WBANDS,
+                    nap=waveband_wrapper(nap, wb=WBANDS),
+                    cdom=waveband_wrapper(cdom, wb=WBANDS),
                     pico=pico,
                     nano=nano,
                     micro=micro)
         
 class ThreeCompModel_OLCI(IOP_model):
     def __init__(self):
+        super().__init__()
         self.set_iop(OLCI_WBANDS,
                      nap=waveband_wrapper(nap, wb=OLCI_WBANDS),
                      cdom=waveband_wrapper(cdom, wb=OLCI_WBANDS),
