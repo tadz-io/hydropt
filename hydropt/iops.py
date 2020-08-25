@@ -264,6 +264,7 @@ class IOP_model:
     
 class ThreeCompModel(IOP_model):
     def __init__(self):
+        super().__init__()
         self.set_iop(HSI_WBANDS,
                      nap=waveband_wrapper(nap, wb=HSI_WBANDS),
                      cdom=waveband_wrapper(cdom, wb=HSI_WBANDS),
