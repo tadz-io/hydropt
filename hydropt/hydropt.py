@@ -2,6 +2,7 @@ import numpy as np
 import warnings
 import pandas as pd
 from xarray import DataArray, Dataset
+from .band_models import BandModel
 import types
 #import pkg_resources
 #from .iops import IOP_model
@@ -126,7 +127,7 @@ class ForwardModel:
         iops = self.iop_model.sum_iop(**x)
         self._validate_bounds(x)
         
-        return self.refl_model.forward(iops)
+        return pd.Series(self.refl_model.forward(iops), index=self.iop_model.wavebands)
     
     def _validate_bounds(self, x):
         pass
@@ -217,10 +218,11 @@ def _to_dataset(func):
 
  
 class InversionModel:
-    def __init__(self, fwd_model, minimizer, loss=_residual):
+    def __init__(self, fwd_model, minimizer, loss=_residual, band_model='rrs'):
         self._fwd_model = fwd_model
         self._minimizer = minimizer
         self._loss = loss
+        self._band_model = BandModel(band_model)
 
     @_to_dataset
     def invert(self, x, y, w=1):
@@ -236,8 +238,10 @@ class InversionModel:
         key, x0 = zip(*[(k, float(v)) for (k, v) in x.items()])
         #loss_func = lambda x, y, f: self._loss(dict(zip(key, x)), y, f, w)
         loss_func = lambda x, y, f: self._loss(dict(x.valuesdict()), y, f, w)
+        # apply band-transformation on y and model
+        args = self._band_model((y, self._fwd_model.forward))
         # to do: implement jac (scipy.optimize)/Dfun (lmfit)
-        xhat = self._minimizer(loss_func, x, args=(y, self._fwd_model.forward))#, method='lm')
+        xhat = self._minimizer(loss_func, x, args=args)
 
         return xhat
 
