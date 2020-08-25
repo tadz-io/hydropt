@@ -1,0 +1,25 @@
+digraph "classes" {
+charset="utf-8"
+rankdir=BT
+"0" [label="{BandModel|band_model\l|}", shape="record"];
+"1" [label="{BandModelRegister|\l|get()\lregister()\l}", shape="record"];
+"2" [label="{FiveCompModel|\l|}", shape="record"];
+"3" [label="{ForwardModel|iop_model\liop_model\lrefl_model\lrefl_model\l|forward()\l}", shape="record"];
+"4" [label="{IOP_model|iop_model : dict\lwavebands\l|check_wavelen()\lget_gradient()\lget_iop()\lplot()\lset_iop()\lsum_iop()\l}", shape="record"];
+"5" [label="{Interpolator|dims\lmethod : str\l|interpolate()\l}", shape="record"];
+"6" [label="{InversionModel|iop_model\l|invert()\l}", shape="record"];
+"7" [label="{PolynomialForward|\l|}", shape="record"];
+"8" [label="{PolynomialReflectance|gradient : NoneType\linterpolate\l|forward()\l}", shape="record"];
+"9" [label="{ReflectanceModel|\l|forward()\lgradient()\linterpolate()\lplot()\l}", shape="record"];
+"10" [label="{ThreeCompModel|\l|}", shape="record"];
+"11" [label="{ThreeCompModel_OLCI|\l|}", shape="record"];
+"12" [label="{ValidationDataset|fwd_model\l|create()\l}", shape="record"];
+"13" [fontcolor="red", label="{WavebandError|\l|}", shape="record"];
+"2" -> "4" [arrowhead="empty", arrowtail="none"];
+"7" -> "3" [arrowhead="empty", arrowtail="none"];
+"8" -> "9" [arrowhead="empty", arrowtail="none"];
+"10" -> "4" [arrowhead="empty", arrowtail="none"];
+"11" -> "4" [arrowhead="empty", arrowtail="none"];
+"0" -> "6" [arrowhead="diamond", arrowtail="none", fontcolor="green", label="_band_model", style="solid"];
+"5" -> "8" [arrowhead="diamond", arrowtail="none", fontcolor="green", label="interpolate", style="solid"];
+}
