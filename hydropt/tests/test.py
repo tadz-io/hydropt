@@ -1,12 +1,12 @@
 from ..iops import ThreeCompModel
-from ..hydropt import PolynomialForward, InversionModel, forward_to_dataset
+from ..hydropt import PolynomialForward, InversionModel
 from scipy import optimize
 import lmfit
 
 iop_model = ThreeCompModel()
 fwd_model = PolynomialForward(iop_model)
 inv_model = InversionModel(fwd_model, lmfit.minimize)
-rrs_0 = forward_to_dataset(inv_model._fwd_model.forward)(nap=1, chl=1, cdom=1)
+rrs_0 = inv_model._fwd_model.forward(nap=1, chl=1, cdom=1)
 
 x0 = lmfit.Parameters()
 x0.add('cdom', value=.01, min=1E-9, max=10)
