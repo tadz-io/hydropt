@@ -196,7 +196,7 @@ def micro(*args):
     
     return iop, gradient
 
-class IOP_model:
+class BioOpticalModel:
     def __init__(self):
         self._wavebands = None
         self.iop_model = {}
@@ -262,7 +262,7 @@ class IOP_model:
         
         return True
     
-class ThreeCompModel(IOP_model):
+class ThreeCompModel(BioOpticalModel):
     def __init__(self):
         super().__init__()
         self.set_iop(HSI_WBANDS,
@@ -270,7 +270,7 @@ class ThreeCompModel(IOP_model):
                      cdom=waveband_wrapper(cdom, wb=HSI_WBANDS),
                      chl=phyto)
         
-class FiveCompModel(IOP_model):
+class FiveCompModel(BioOpticalModel):
     ''' 
     5 component IOP model:
     
@@ -285,7 +285,7 @@ class FiveCompModel(IOP_model):
                     nano=nano,
                     micro=micro)
         
-class ThreeCompModel_OLCI(IOP_model):
+class ThreeCompModel_OLCI(BioOpticalModel):
     def __init__(self):
         super().__init__()
         self.set_iop(OLCI_WBANDS,
