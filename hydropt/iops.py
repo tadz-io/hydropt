@@ -2,6 +2,7 @@ import numpy as np
 import pandas as pd
 import pkg_resources
 import matplotlib.pyplot as plt
+import warnings
 
 # TO DO
 # - cache function for interpolation of phytoplankton IOPs
@@ -28,10 +29,13 @@ def interpolate_to_wavebands(data, wavelength, index='wavelength'):
     wband_merge = np.unique(sorted(np.append(data[index], wavelength)))
 
     data.set_index(index, inplace=True)
+    #.interpolate(method='slinear', fill_value=0, limit_direction='both')\
     data = data.reindex(wband_merge)\
         .astype(float)\
-        .interpolate(method='slinear', fill_value=0, limit_direction='both')\
+        .interpolate()\
         .reindex(wavelength)
+
+    warnings.warn('changed interpolation method')
 
     return data
 

@@ -207,6 +207,12 @@ def _to_dataset(func):
         # add stats
         data.update({i: getattr(out, i) for i in stat_vars})   
         # iop_hat = {k: v for k,v in zip(x_hat.keys(), iop_model.get_iop(**x_hat))}
+        # calculate standard-error
+        try:
+            data.update({'std_error': (['comp'], np.sqrt(getattr(out, 'covar').diagonal()))})
+        except AttributeError:
+            data.update({'std_error': (['comp'], np.repeat(np.nan, len(x_hat)))})
+        # set coordinates
         coords = {
             'wavelength': iop_model.wavebands,
             'comp': [i for i in x_hat.keys()],
@@ -225,7 +231,7 @@ class InversionModel:
         self._band_model = BandModel(band_model)
 
     @_to_dataset
-    def invert(self, x, y, w=1):
+    def invert(self, y, x, w=1):
         ''' 
         x - initial guess
         y - rrs to invert
