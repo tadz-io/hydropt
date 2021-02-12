@@ -2,7 +2,7 @@ import numpy as np
 import warnings
 import pandas as pd
 from xarray import DataArray, Dataset
-from .band_models import BandModel
+from band_models import BandModel
 import types
 #import pkg_resources
 #from .iops import IOP_model
@@ -137,6 +137,7 @@ class PolynomialReflectance(ReflectanceModel):
 
     _parameters = DataArray(PACE_POLYNOM_05)
     _domain = None
+    _powers = PolynomialFeatures(degree=5).fit([[1,1]]).powers_
     interpolate = Interpolator(dims='wavelength')
     gradient = None
 
@@ -144,11 +145,18 @@ class PolynomialReflectance(ReflectanceModel):
         c = self._parameters
         x = np.log(x)
         # get polynomial features
-        ft = PolynomialFeatures(degree=5).fit_transform(x.T)
+        #ft = PolynomialFeatures(degree=5).fit_transform(x.T)
+        ft = self._polynomial_features(x.T)
         # calculate log(Rrs)
         log_rrs = np.dot(c, ft.T).diagonal()
 
         return np.exp(log_rrs)
+
+    def _polynomial_features(self, x):
+        x = x.T
+        f = np.array([(x[0]**i)*(x[1]**j) for (i,j) in self._powers]).T
+
+        return f
 
 class PolynomialForward(ForwardModel):
     def __init__(self, iop_model):
