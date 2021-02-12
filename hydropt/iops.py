@@ -74,7 +74,7 @@ def nap(*args, wb):
     def iop(spm=args[0]):
         return spm*np.array([(.041*.75*np.exp(-.0123*(wb-443))), .014*0.57*(550/wb)])
     
-    def gradient():
+    def gradient(*args):
         d_a = .03075*np.exp(-.0123*(wb-443))
         d_bb = .014*0.57*(550/wb)
         
@@ -89,7 +89,7 @@ def cdom(*args, wb):
     def iop(a_440=args[0]):
         return np.array([a_440*np.exp(-0.017*(wb-440)), np.zeros(len(wb))])
     
-    def gradient():
+    def gradient(*args):
         '''
         Gradient of CDOM IOP model
         ''' 
@@ -115,7 +115,7 @@ def phyto(*args):
         
         return np.array([a, bb])
     
-    def gradient():
+    def gradient(*args):
         '''dummy gradient function'''
         return np.zeros([2,63])
     
@@ -136,7 +136,7 @@ def phyto_olci(*args):
         
         return np.array([a, bb])
     
-    def gradient():
+    def gradient(*args):
         '''dummy gradient function'''
         return np.zeros([2,11])
     
@@ -155,7 +155,7 @@ def pico(*args):
 
         return chl*np.array([a_star.reshape(-1), bb_star])
     
-    def gradient():
+    def gradient(*args):
         return None
     
     return iop, gradient
@@ -173,7 +173,7 @@ def nano(*args):
 
         return chl*np.array([a_star.reshape(-1), bb_star])
 
-    def gradient():
+    def gradient(*args):
         return None
     
     return iop, gradient
@@ -191,7 +191,7 @@ def micro(*args):
 
         return chl*np.array([a_star.reshape(-1), bb_star])
     
-    def gradient():
+    def gradient(*args):
         return None
     
     return iop, gradient
@@ -200,6 +200,7 @@ class BioOpticalModel:
     def __init__(self):
         self._wavebands = None
         self.iop_model = {}
+        self.gradient = {}
     
     @property
     def wavebands(self):
@@ -208,12 +209,16 @@ class BioOpticalModel:
     def set_iop(self, wavebands, **kwargs):
         if self.check_wavelen(wavebands, **kwargs):
             self._wavebands = wavebands
-            self.iop_model.update({k: v for (k, v) in kwargs.items()})
+            try:
+                self.iop_model.update({k: v(None)[0] for (k, v) in kwargs.items()})
+                self.gradient.update({k: v(None)[1] for (k, v) in kwargs.items()})
+            except:
+                self.iop_model.update({k: v for (k, v) in kwargs.items()})
     
     def get_iop(self, **kwargs):
         iops = []
         for k, value in kwargs.items():
-            iops.append([self.iop_model.get(k)(value)[0]()])
+            iops.append([self.iop_model.get(k)(value)])
         
         iops = np.vstack(iops)
         
@@ -222,7 +227,7 @@ class BioOpticalModel:
     def get_gradient(self, **kwargs):
         grads = []
         for k, value in kwargs.items():
-            grads.append([self.iop_model.get(k)(value)[1]()])
+            grads.append([self.gradient.get(k)(value)])
         
         grads = np.vstack(grads)
         
