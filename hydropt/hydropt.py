@@ -1,8 +1,11 @@
 import numpy as np
+#import jax.numpy as np
+import jax
 import warnings
 import pandas as pd
+import itertools
 from xarray import DataArray, Dataset
-from band_models import BandModel
+from .band_models import BandModel
 import types
 #import pkg_resources
 #from .iops import IOP_model
@@ -11,13 +14,6 @@ from sklearn.preprocessing import PolynomialFeatures
 
 ''' TO DO:
 # - move model coefficients to XML/JSON file and include bounds                                     
-# - to use jax/autograd replace sklearn PolynomialFeatures with:
-    
-    def _polynomial_features(self, x):
-        x = x.T
-        f = np.array([(x[0]**i)*(x[1]**j) for (i,j) in self.model_powers]).T
-
-        return f
 '''
 
 
@@ -25,6 +21,26 @@ from sklearn.preprocessing import PolynomialFeatures
 # OLCI_POLYNOM_04 = pkg_resources.resource_filename('hydropt', 'data/OLCI_polynom_04.csv')
 
 PACE_POLYNOM_05 = pd.read_csv('/Users/tadzio/Documents/code_repo/hydropt_4_sent3/data/processed/model_coefficients/PACE_polynom_05.csv', index_col=0)
+
+def der_2d_polynomial(x, c, p):
+    '''
+    derivative of 2 variable polynomial
+    
+    x: points at wich to evaluate the derivative; a nx2 array were n is number of wavebands
+    c: coefficients of the polynomial terms; a nxm matrix where n is the number wavebands and m the number of polynomial terms
+    p: exponents of the n polynomial terms; a mx2 matrix
+    '''
+    if c.shape[0] is not x.shape[0]:
+        warnings.warn('matrix dimensions of x and c do not match!')
+    # get derivative terms of polynomial features
+    d_x1 = lambda x, p: p[0]*x[0]**(float(p[0]-1))*x[1]**p[1]
+    d_x2 = lambda x, p: p[1]*x[1]**(float(p[1]-1))*x[0]**p[0]
+    # evaluate terms at [x]
+    ft = np.array([[d_x1(x,p), d_x2(x,p)] for (x,p) in zip(itertools.cycle([x.T]), p)])
+    # dot derivative matrix with polynomial coefficients and get diagonal
+    dx = np.array([np.dot(c,ft[:,0,:]).diagonal(), np.dot(c,ft[:,1,:]).diagonal()])
+    
+    return dx
 
 class Interpolator:
     '''
@@ -79,7 +95,7 @@ class ReflectanceModel(ABC):
         pass
 
     @abstractmethod
-    def gradient(self):
+    def gradient(self, x):
         pass
     
     def plot(self):
@@ -127,8 +143,27 @@ class ForwardModel:
         iops = self.iop_model.sum_iop(**x)
         self._validate_bounds(x)
         
+        #for jax.jacfwd/jacrev uncomment line below
+        #return self.refl_model.forward(iops)
         return pd.Series(self.refl_model.forward(iops), index=self.iop_model.wavebands)
     
+    def jacobian(self, **x):
+        # init empty jacobian matrix
+        jac = np.empty([self.iop_model.wavebands.size, len(x)])
+        # calculate total a & bb
+        iops = self.iop_model.sum_iop(**x)
+        # get gradient of bio-optical models
+        grad_iops = self.iop_model.get_gradient(**x)
+        # get gradient of reflectance model
+        grad_refl_model = self.refl_model.gradient(iops)
+        # use tensor product instead?
+        for c, (i,j) in enumerate(zip(grad_refl_model.T, grad_iops.T)):
+            #for jax.jacfwd/jacrev uncomment line below
+            #jac = jax.ops.index_update(jac, jax.ops.index[c], np.dot(i, j))
+            jac[c] = np.dot(i,j)
+        
+        return jac
+
     def _validate_bounds(self, x):
         pass
 
@@ -139,10 +174,9 @@ class PolynomialReflectance(ReflectanceModel):
     _domain = None
     _powers = PolynomialFeatures(degree=5).fit([[1,1]]).powers_
     interpolate = Interpolator(dims='wavelength')
-    gradient = None
 
     def forward(self, x):
-        c = self._parameters
+        c = self._parameters.values
         x = np.log(x)
         # get polynomial features
         #ft = PolynomialFeatures(degree=5).fit_transform(x.T)
@@ -151,6 +185,20 @@ class PolynomialReflectance(ReflectanceModel):
         log_rrs = np.dot(c, ft.T).diagonal()
 
         return np.exp(log_rrs)
+
+    def gradient(self, x):
+        # evaluate derivative of 2d polynomial at ln(x)
+        d_p = der_2d_polynomial(np.log(x.T), self._parameters.values, self._powers)
+        # dln(a)/da = 1/a
+        d_a = 1/x[0]
+        # dln(bb)/dbb = 1/bb
+        d_bb = 1/x[1]
+        # dRrs/dln(Rrs) = Rrs
+        rrs = self.forward(x)
+        # full gradient
+        dx = rrs*d_p*np.array([d_a, d_bb])
+
+        return dx
 
     def _polynomial_features(self, x):
         x = x.T
