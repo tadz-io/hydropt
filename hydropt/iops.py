@@ -1,4 +1,5 @@
-import numpy as np
+#import numpy as np
+import jax.numpy as np
 import pandas as pd
 import pkg_resources
 import matplotlib.pyplot as plt
@@ -108,11 +109,13 @@ def phyto(*args):
     '''   
     def iop(chl=args[0]):
         # calculate absorption
-        a = 0.06*np.power(chl, .65)*a_phyto_base_HSI.absorption.values
+        #a = 0.06*np.power(chl, .65)*a_phyto_base_HSI.absorption.values
+        a = 0.06*chl*a_phyto_base_HSI.absorption.values
         # calculate backscatter according to 0.1-tadzio-IOP_backscatter
         # notebook in hydropt-4-sent3
-        bb = np.repeat(.014*0.18*np.power(chl, .471), len(a))
-        
+        #bb = np.repeat(.014*0.18*np.power(chl, .471), len(a))
+        bb = np.repeat(.014*0.18*chl, len(a))
+
         return np.array([a, bb])
     
     def gradient(*args):
@@ -297,3 +300,10 @@ class ThreeCompModel_OLCI(BioOpticalModel):
                      nap=waveband_wrapper(nap, wb=OLCI_WBANDS),
                      cdom=waveband_wrapper(cdom, wb=OLCI_WBANDS),
                      chl=phyto_olci)
+
+class TwoCompModel(BioOpticalModel):
+    def __init__(self):
+        super().__init__()
+        self.set_iop(OLCI_WBANDS,
+                     nap=waveband_wrapper(nap, wb=OLCI_WBANDS),
+                     cdom=waveband_wrapper(cdom, wb=OLCI_WBANDS))
