@@ -214,7 +214,7 @@ class PolynomialForward(ForwardModel):
 def _residual(x, y, f, w):
     '''weighted residuals'''
     
-    return (y - f(**x))/(1/np.sqrt(w))
+    return (f(**x)-y)/(1/np.sqrt(w))
 
 
 class ValidationDataset:
@@ -291,14 +291,17 @@ class InversionModel:
         specify decorater class during init or as property
         https://stackoverflow.com/questions/51883058/l1-norm-instead-of-l2-norm-for-cost-function-in-regression-model
         '''
-        key, x0 = zip(*[(k, float(v)) for (k, v) in x.items()])
-        #loss_func = lambda x, y, f: self._loss(dict(zip(key, x)), y, f, w)
-        loss_func = lambda x, y, f: self._loss(dict(x.valuesdict()), y, f, w)
+        #key, x0 = zip(*[(k, float(v)) for (k, v) in x.items()])
+        loss_fun = lambda x, y, f: self._loss(dict(x.valuesdict()), y, f, w)
+        # parse lmfit.Parameters to dict for jacobian method argument
+        jac_fun = lambda x, y, f: self._fwd_model.jacobian(**dict(x.valuesdict()))
         # apply band-transformation on y and model
         args = self._band_model((y, self._fwd_model.forward))
         # to do: implement jac (scipy.optimize)/Dfun (lmfit)
-        xhat = self._minimizer(loss_func, x, args=args)
-
+        xhat = self._minimizer(loss_fun, x, args=args, Dfun=jac_fun)
+        warnings.warn('''no band transformation is applied to jacobian -
+         o.k. when band_model = 'rrs' ''')
+        
         return xhat
 
     @property
