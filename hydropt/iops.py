@@ -1,5 +1,5 @@
-#import numpy as np
-import jax.numpy as np
+import numpy as np
+#import jax.numpy as np
 import pandas as pd
 import pkg_resources
 import matplotlib.pyplot as plt
@@ -159,7 +159,10 @@ def pico(*args):
         return chl*np.array([a_star.reshape(-1), bb_star])
     
     def gradient(*args):
-        return None
+        d_a = a_pico_base['pico'].values
+        d_bb = .0038*(WBANDS/470)**-1.4
+
+        return np.array([d_a.reshape(-1), d_bb])
     
     return iop, gradient
 
@@ -177,7 +180,10 @@ def nano(*args):
         return chl*np.array([a_star.reshape(-1), bb_star])
 
     def gradient(*args):
-        return None
+        d_a = a_nano_base['nano'].values
+        d_bb = .0038*(WBANDS/470)**-1.4
+
+        return np.array([d_a.reshape(-1), d_bb])
     
     return iop, gradient
 
@@ -195,7 +201,10 @@ def micro(*args):
         return chl*np.array([a_star.reshape(-1), bb_star])
     
     def gradient(*args):
-        return None
+        d_a = a_micro_base['micro'].values
+        d_bb = .0004*(WBANDS/470)**.4
+
+        return np.array([d_a.reshape(-1), d_bb])
     
     return iop, gradient
 
