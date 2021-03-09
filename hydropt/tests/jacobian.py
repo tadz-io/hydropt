@@ -1,4 +1,4 @@
-from ..hydropt import PolynomialForward, PACE_POLYNOM_05, der_2d_polynomial
+from ..hydropt import PolynomialForward, PACE_POLYNOM_05
 from ..bio_opts import TwoCompModel
 from sklearn.preprocessing import PolynomialFeatures
 import lmfit
@@ -7,101 +7,154 @@ import numpy as np
 from xarray import DataArray
 from jax import jacfwd
 import jax
+import itertools
+import warnings
 
 HSI_WBANDS = np.arange(400, 711, 5)
+wbands = HSI_WBANDS
+
+iop_model = TwoCompModel()
+fwd_model = PolynomialForward(iop_model)
 
 powers = PolynomialFeatures(degree=5).fit([[1, 1]]).powers_
 cfs = DataArray(PACE_POLYNOM_05).values
 
-iop_model = TwoCompModel()
-fwd_model = PolynomialForward(iop_model)
-fwd_model_l = lambda x: fwd_model.forward(**x)
-rrs_0 = fwd_model.forward(nap=.3, cdom=.02)
+def cdom_iop(a_440):
+    '''
+    IOP model for CDOM
+    '''
+    return np.array([a_440*np.exp(-0.017*(wbands-440)), np.zeros(len(wbands))])
 
-nap_grad = np.array([
-    .03075*np.exp(-.0123*(HSI_WBANDS-443)),
-    .014*0.57*(550/HSI_WBANDS)])
+def nap_iop(spm):
+    '''
+    IOP model for NAP
+    '''
+    # vectorized
+    return spm*np.array([(.041*.75*np.exp(-.0123*(wbands-443))), 0.014*0.57*(550/wbands)])
 
-cdom_grad = np.array([
-    np.exp(-.017*(HSI_WBANDS-440)),
-    np.zeros(len(HSI_WBANDS))])
+def grad_cdom_iop():
+    '''
+    Gradient of CDOM IOP model
+    ''' 
+    d_a = np.exp(-.017*(wbands-440))
+    d_b = np.zeros(len(d_a))
+    return np.array([d_a, d_b])
 
-def refl_grad(x):
-    d_p = der_2d_polynomial(np.log(x.T), cfs, powers)
-    d_a = 1/x[0]
-    d_bb = 1/x[1]
-    rrs = fwd_model.refl_model.forward(x)
-    dx = rrs*d_p*np.array([d_a, d_bb])
+def grad_nap_iop():
+    '''
+    Gradient of NAP IOP model
+    '''
+    d_a = .03075*np.exp(-.0123*(wbands-443))
+    d_b = .014*0.57*(550/wbands)
+    
+    return np.array([d_a, d_b])
 
+def total_iop(ag, spm):
+    '''
+    total_iop calculates total absorption and scatter coefficients (excluding water)
+    
+    ag - CDOM absorption at 440nm
+    spm - SPM concentration in g/m3
+    pico - chl concentration in mg/m3 for picos
+    nano - chl concentration in mg/m3 for nanos
+    micro - chl concentration in mg/m3 for micros
+    '''
+    
+    return cdom_iop(ag), nap_iop(spm)
+
+def der_2d_polynomial(x, c, p):
+    '''
+    derivative of 2 variable polynomial
+    
+    x: points at wich to evaluate the derivative; a nx2 array were n is number of wavebands
+    c: coefficients of the polynomial terms; a nxm matrix where n is the number wavebands and m the number of polynomial terms
+    p: exponents of the n polynomial terms; a mx2 matrix
+    '''
+    if c.shape[0] is not x.shape[0]:
+        warnings.warn('matrix dimensions of x and c do not match!')
+    # get derivative terms of polynomial features
+    d_x1 = lambda x, p: p[0]*x[0]**(float(p[0]-1))*x[1]**p[1]
+    d_x2 = lambda x, p: p[1]*x[1]**(float(p[1]-1))*x[0]**p[0]
+    # evaluate terms at [x]
+    ft = np.array([[d_x1(x,p), d_x2(x,p)] for (x,p) in zip(itertools.cycle([x.T]), p)])
+    # dot derivative matrix with polynomial coefficients and get diagonal
+    dx = np.array([np.dot(c,ft[:,0,:]).diagonal(), np.dot(c,ft[:,1,:]).diagonal()])
+    
     return dx
 
-
-def residuals(x):
-    residual = rrs_0-fwd_model.forward(**dict(x.valuesdict()))
-
-    return residual
-
-def jacobian_num(x):
-    x = {
-        'nap': x['nap'].value,
-        'cdom': x['cdom'].value}
-    jac = jacfwd(fwd_model_l)(x)
-    jac_array = np.array([jac.get('nap'), jac.get('cdom')])
-
-    return jac_array.T
+def hydrolight_polynom(x, degree=5):
+    '''
+    Forward model using polynomial fit to Hydrolight simulations
+    
+    x[0]: total log absorption at wavelength i
+    x[1]: total log backscatter at wavelength i
+    '''
+    # get polynomial features
+    ft = PolynomialFeatures(degree=degree).fit_transform(x.T)
+    # get polynomial coefficients
+    # calculate log(Rrs)
+    log_Rrs = np.dot(cfs, ft.T).diagonal()
+    
+    #return np.exp(log_Rrs)
+    return log_Rrs
 
 def jacobian(x):
     '''
-    figure out order of components [nap, cdom]*grad or [cdom, nap]*grad
-    '''
-    jac = np.empty([63, 2])
-    xp = {
-        'nap': x['nap'].value,
-        'cdom': x['cdom'].value}
-    #grad_iops = fwd_model.iop_model.get_gradient(**xp)
-    grad_iops = np.array([nap_grad, cdom_grad])
-    iops = fwd_model.iop_model.sum_iop(**xp)
-    #grad_refl = fwd_model.refl_model.gradient(iops)
-    grad_refl = refl_grad(iops)
+    Jacobian at [x] of the remote-sensing reflectance (Rrs),
+    using the Hydrolight polynomial as forward model, w.r.t concentration of constituents
     
-    for c, (i,j) in enumerate(zip(grad_refl.T, grad_iops.T)):
-        jac[c] = np.dot(i,j)
-        #jac = jax.ops.index_update(jac, jax.ops.index[c], np.dot(i, j))
-        
-    return jac
-
-def jacobian_v2(x):
-
+    x[0]: cdom absorption at 440 nm
+    x[1]: spm concentration in g/m^3
+    x[2]: pico concentration in mg/m^3
+    x[3]: nano concentration in mg/m^3
+    x[4]: micro concentration in mg/m^3
+    '''
     if isinstance(x, lmfit.Parameters):
-        x = [x['nap'].value, x['cdom'].value]
+        x = [x['cdom'].value, x['nap'].value]
     
     # gradients of IOP models at every waveband
-    grad_iops = np.array([nap_grad, cdom_grad])
-    iops = fwd_model.iop_model.sum_iop(nap=x[0], cdom=x[1])
+    grad_iops = np.array([grad_cdom_iop(), grad_nap_iop()])
+    #iops = np.sum(total_iop(*x), axis=0)
+    iops = fwd_model.iop_model.sum_iop(cdom=x[0], nap=x[1])
     # calculate rrs
+    #rrs = np.exp(hydrolight_polynom(np.log(iops)))
     rrs = fwd_model.refl_model.forward(iops)
     # (dln(a)/da) * (dRrs/dln(Rrs)) = Rrs/a; (dln(b)/db) * (dRrs/dln(Rrs)) = Rrs/b; do element-wise multiplication
-    grad_log_iops = np.array([rrs/iops[0],rrs/iops[1]]) * grad_iops
+    grad_log_iops = np.array([rrs/iops[0], rrs/iops[1]]) * grad_iops
     # evaluate jacobian of hydrolight polynomial at x
     grad_polynom = der_2d_polynomial(np.log(iops.T), cfs, powers)
     #initialize empty jacobian matrix
     jac = np.empty([grad_polynom.shape[1], grad_log_iops.shape[0]])  
     for c, (i,j) in enumerate(zip(grad_polynom.T, grad_log_iops.T)):
         jac[c] = np.dot(i,j)
-        #jac = jax.ops.index_update(jac, jax.ops.index[c], np.dot(i, j))
-    
+        
     return jac
 
+def cost_function(y):
+    '''
+    
+    create scalar cost function by summing residuals
+    y - target
+    '''
+
+    def minimizer(x0):
+        ag = x0['cdom'].value
+        spm = x0['nap'].value
+        # calculate log of total IOPs
+        rrs = fwd_model.forward(cdom=ag, nap=spm)
+        # calculate residuals
+        residual = rrs-y
+        
+        return residual
+    
+    return minimizer
+
+iops_t = np.sum(total_iop(ag=.02, spm=.3), axis=0)
+rrs_0 = fwd_model.forward(cdom=.02, nap=.3)
+
 x0 = lmfit.Parameters()
-x0.add('nap', value=.2, min=1E-9, max=20)
 x0.add('cdom', value=.01, min=1E-9, max=10)
+x0.add('nap', value=.1, min=1E-9, max=200)
 
-# p = jacfwd(fwd_model_l)({
-#     'nap': .2,
-#     'cdom': .01})
-
-q = jacobian(x0)
-q2 = jacobian_v2(x0)
-
-xhat = lmfit.minimize(residuals, x0, Dfun=jacobian_v2)
-print(residuals(x0))
+xhat = lmfit.minimize(cost_function(rrs_0), x0, Dfun=jacobian)
+pass
