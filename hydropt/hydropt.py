@@ -1,6 +1,6 @@
 import numpy as np
 #import jax.numpy as np
-import jax
+#import jax
 import warnings
 import pandas as pd
 import itertools
