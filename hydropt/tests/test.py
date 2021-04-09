@@ -1,4 +1,4 @@
-from ..iops import FiveCompModel, ThreeCompModel
+from ..iops import FiveCompModel, ThreeCompModel, TwoCompModel
 from ..hydropt import PolynomialForward, InversionModel
 from jax import jacfwd
 from scipy import optimize
@@ -6,6 +6,7 @@ import lmfit
 
 
 iop_model = FiveCompModel()
+#iop_model = TwoCompModel()
 fwd_model = PolynomialForward(iop_model)
 inv_model = InversionModel(fwd_model, lmfit.minimize)
 rrs_0 = fwd_model.forward(
@@ -22,7 +23,8 @@ x0.add('micro', value=.1, min=1E-9, max=10)
 
 
 
-q = inv_model.invert(x0, rrs_0)
+q = inv_model.invert(x=x0, y=rrs_0, jac=True)
+print(q.params.valuesdict())
 pass
 
 # '''

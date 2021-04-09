@@ -248,7 +248,7 @@ class BioOpticalModel:
         grads = np.vstack(grads)
         
         return grads
-    
+   
     def sum_iop(self, **kwargs):
         iops = self.get_iop(**kwargs).sum(axis=0)
         
