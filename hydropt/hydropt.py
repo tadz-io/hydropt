@@ -286,12 +286,13 @@ class InversionModel:
         self._loss = loss
         self._band_model = BandModel(band_model)
 
-    @_to_dataset
-    def invert(self, y, x, w=1):
+    #@_to_dataset
+    def invert(self, y, x, w=1, jac=False):
         ''' 
         x - initial guess
         y - rrs to invert
         w - weights to wavebands
+        jac - use analytical expression of jacobian if available
 
         decorate invert() to parse output to dict/DataFrame
         specify decorater class during init or as property
@@ -299,8 +300,11 @@ class InversionModel:
         '''
         #key, x0 = zip(*[(k, float(v)) for (k, v) in x.items()])
         loss_fun = lambda x, y, f: self._loss(dict(x.valuesdict()), y, f, w)
-        # parse lmfit.Parameters to dict for jacobian method argument
-        jac_fun = lambda x, y, f: self._fwd_model.jacobian(**dict(x.valuesdict()))
+        if jac:
+            # parse lmfit.Parameters to dict for jacobian method argument
+            jac_fun = lambda x, y, f: self._fwd_model.jacobian(**dict(x.valuesdict()))
+        else:
+            jac_fun = None
         # apply band-transformation on y and model
         args = self._band_model((y, self._fwd_model.forward))
         # to do: implement jac (scipy.optimize)/Dfun (lmfit)
