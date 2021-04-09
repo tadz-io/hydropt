@@ -286,7 +286,7 @@ class InversionModel:
         self._loss = loss
         self._band_model = BandModel(band_model)
 
-    #@_to_dataset
+    @_to_dataset
     def invert(self, y, x, w=1, jac=False):
         ''' 
         x - initial guess
