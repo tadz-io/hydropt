@@ -33,21 +33,22 @@ class TestModelAccuracy(unittest.TestCase):
         delta = _relative_error(self.data.rrs, self.data.rrs_hat).\
                     groupby('wavelength').\
                     mean()
-        np.testing.assert_array_less(delta, .01)
+        np.testing.assert_array_less(delta, .01,
+            'relative error of less than 1% expected')
 
 
     def test_rmsre(self):
         rmsre = _rmsre(self.data.rrs, self.data.rrs_hat)
-        self.assertLessEqual(rmsre, .01, 'RMSRE should be less than 1%')
+        self.assertLessEqual(rmsre, .01, 'RMSRE of less than 1% expected')
 
     def _preprocess_data(self, path, by):
         data = pd.read_csv(path, index_col=by)
         fwd_model = PolynomialReflectance().forward
-        rrs_hat = data.\
-                        groupby(by).\
-                        apply(lambda x: pd.Series(
-                            fwd_model([x.a, x.bb]), index=x.wavelength)).\
-                        melt(value_name='rrs_hat', ignore_index=False)
+        rrs_hat = data\
+                    .groupby(by)\
+                    .apply(lambda x: pd.Series(
+                        fwd_model([x.a, x.bb]), index=x.wavelength))\
+                    .melt(value_name='rrs_hat', ignore_index=False)
         
         return self._merge(data, rrs_hat, on=[by, 'wavelength'])
 
