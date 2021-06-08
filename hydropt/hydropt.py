@@ -5,9 +5,9 @@ import warnings
 import pandas as pd
 import itertools
 from xarray import DataArray, Dataset
-from .band_models import BandModel
+from hydropt.band_models import BandModel
 import types
-#import pkg_resources
+import pkg_resources
 #from .iops import IOP_model
 from abc import ABC, abstractmethod
 from sklearn.preprocessing import PolynomialFeatures
@@ -21,6 +21,7 @@ from sklearn.preprocessing import PolynomialFeatures
 # OLCI_POLYNOM_04 = pkg_resources.resource_filename('hydropt', 'data/OLCI_polynom_04.csv')
 
 PACE_POLYNOM_05 = pd.read_csv('/Users/tadzio/Documents/code_repo/hydropt_4_sent3/data/processed/model_coefficients/PACE_polynom_05.csv', index_col=0)
+PACE_POLYNOM_04_H2O = pd.read_csv('./hydropt/data/PACE_polynom_04_h2o.csv', index_col=0)
 
 def der_2d_polynomial(x, c, p):
     '''
@@ -170,9 +171,9 @@ class ForwardModel:
 
 class PolynomialReflectance(ReflectanceModel):
 
-    _parameters = DataArray(PACE_POLYNOM_05)
+    _parameters = DataArray(PACE_POLYNOM_04_H2O)
     _domain = None
-    _powers = PolynomialFeatures(degree=5).fit([[1,1]]).powers_
+    _powers = PolynomialFeatures(degree=4).fit([[1,1]]).powers_
     interpolate = Interpolator(dims='wavelength')
 
     def forward(self, x):

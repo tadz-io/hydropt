@@ -15,6 +15,7 @@ import warnings
 
 PHYTO_SIOP = '/Users/tadzio/Documents/code_repo/hydropt/hydropt/data/phyto_siop.csv'
 PHYTO_SC_SIOP = '/Users/tadzio/Documents/code_repo/hydropt/hydropt/data/psc_absorption_se_uitz_2008.csv'
+H2O_IOP_DEFAULT = pd.read_csv('./data/water_mason016.csv', sep=',', index_col='wavelength')
 
 OLCI_WBANDS = np.array([400, 412.5, 442.5, 490, 510, 560, 620, 665, 673.75, 681.25, 708.75])
 HSI_WBANDS = np.arange(400, 711, 5)
@@ -70,6 +71,18 @@ micro_siop.loc[710,:] = [0,0]
 a_pico_base = interpolate_to_wavebands(data=pico_siop, wavelength=WBANDS)
 a_nano_base = interpolate_to_wavebands(data=nano_siop, wavelength=WBANDS)
 a_micro_base = interpolate_to_wavebands(data=micro_siop, wavelength=WBANDS)
+
+def h2o(*args):
+    '''
+    IOP model for clear natural water
+    '''
+    def iop(*args):
+        return H2O_IOP_DEFAULT.T.values
+
+    def gradient(*args):
+        return None
+
+    return iop, gradient
 
 def nap(*args, wb):
     '''
@@ -249,7 +262,9 @@ class BioOpticalModel:
         
         return grads
    
-    def sum_iop(self, **kwargs):
+    def sum_iop(self, incl_water=True, **kwargs):
+        if incl_water:
+            kwargs.update({'water': None})
         iops = self.get_iop(**kwargs).sum(axis=0)
         
         return iops
