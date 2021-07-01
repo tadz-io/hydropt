@@ -1,10 +1,10 @@
 from setuptools import setup
 
 setup(name='hydropt',
-      version='0.2.0',
+      version='0.1-alpha',
       description='HYDROPT',
       url='',
-      author='',
+      author='Tadzio Holtrop',
       author_email='',
       license='',
       packages=['hydropt'],
