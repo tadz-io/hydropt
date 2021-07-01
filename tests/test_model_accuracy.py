@@ -30,9 +30,9 @@ class TestModelAccuracy(unittest.TestCase):
 
     def test_relative_error(self):
         # take average per waveband
-        delta = _relative_error(self.data.rrs, self.data.rrs_hat).\
-                    groupby('wavelength').\
-                    mean()
+        delta = _relative_error(self.data.rrs, self.data.rrs_hat)\
+                    .groupby('wavelength')\
+                    .mean()
         np.testing.assert_array_less(delta, .01,
             'relative error of less than 1% expected')
 
@@ -57,8 +57,6 @@ class TestModelAccuracy(unittest.TestCase):
         x, y = [i.reset_index().set_index(on) for i in [x,y]]
 
         return pd.merge(x, y, left_index=True, right_index=True)
-
-pass
 
 if __name__ == '__main__':
     unittest.main()
