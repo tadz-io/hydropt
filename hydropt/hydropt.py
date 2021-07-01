@@ -1,32 +1,23 @@
-import numpy as np
-#import jax.numpy as np
-#import jax
 import warnings
-import pandas as pd
+import numpy as np
 import itertools
-from xarray import DataArray, Dataset
-from hydropt.band_models import BandModel
 import types
 import pkg_resources
-#from .iops import IOP_model
 from abc import ABC, abstractmethod
 from sklearn.preprocessing import PolynomialFeatures
+import pandas as pd
+from xarray import DataArray, Dataset
+from hydropt.band_models import BandModel
+#import jax.numpy as np
+#import jax
 
-''' TO DO:
-# - move model coefficients to XML/JSON file and include bounds                                     
-'''
-
-
-# PACE_POLYNOM_05 = pkg_resources.resource_filename('hydropt', 'data/PACE_polynom_05.csv')
-# OLCI_POLYNOM_04 = pkg_resources.resource_filename('hydropt', 'data/OLCI_polynom_04.csv')
-
-PACE_POLYNOM_05 = pd.read_csv('/Users/tadzio/Documents/code_repo/hydropt_4_sent3/data/processed/model_coefficients/PACE_polynom_05.csv', index_col=0)
-PACE_POLYNOM_04_H2O = pd.read_csv('./hydropt/data/PACE_polynom_04_h2o.csv', index_col=0)
+PACE_POLYNOM_04_H2O_STREAM = pkg_resources.resource_filename('hydropt', 'data/PACE_polynom_04_h2o.csv')
+PACE_POLYNOM_04_H2O = pd.read_csv(PACE_POLYNOM_04_H2O_STREAM, index_col=0)
 
 def der_2d_polynomial(x, c, p):
     '''
     derivative of 2 variable polynomial
-    
+
     x: points at wich to evaluate the derivative; a nx2 array were n is number of wavebands
     c: coefficients of the polynomial terms; a nxm matrix where n is the number wavebands and m the number of polynomial terms
     p: exponents of the n polynomial terms; a mx2 matrix
@@ -71,13 +62,6 @@ class Interpolator:
 class WavebandError(ValueError):
     pass
 
-''' Abstract base classes
-
-Definition of all abstract base classes
-
-ForwardModel: model to calculate Rrs from IOPs
-'''
-
 class ReflectanceModel(ABC):
     ''' 
     rename ForwardModel -> ReflectanceModel
@@ -102,14 +86,9 @@ class ReflectanceModel(ABC):
     def plot(self):
         pass
 
-''' Context classes
-
-ForwardModel: ...
-'''
-
 class ForwardModel:
     '''
-    BioOpticalModel -> ForwardModel
+    ...
     '''
     def __init__(self, iop_model, refl_model):
         self.iop_model = iop_model
@@ -295,11 +274,8 @@ class InversionModel:
         w - weights to wavebands
         jac - use analytical expression of jacobian if available
 
-        decorate invert() to parse output to dict/DataFrame
-        specify decorater class during init or as property
         https://stackoverflow.com/questions/51883058/l1-norm-instead-of-l2-norm-for-cost-function-in-regression-model
         '''
-        #key, x0 = zip(*[(k, float(v)) for (k, v) in x.items()])
         loss_fun = lambda x, y, f: self._loss(dict(x.valuesdict()), y, f, w)
         if jac:
             # parse lmfit.Parameters to dict for jacobian method argument
@@ -308,7 +284,7 @@ class InversionModel:
             jac_fun = None
         # apply band-transformation on y and model
         args = self._band_model((y, self._fwd_model.forward))
-        # to do: implement jac (scipy.optimize)/Dfun (lmfit)
+        # do optimization
         xhat = self._minimizer(loss_fun, x, args=args, Dfun=jac_fun)
         warnings.warn('''no band transformation is applied to jacobian -
          o.k. when band_model = 'rrs' ''')

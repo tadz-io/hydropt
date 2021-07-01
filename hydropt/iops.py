@@ -1,5 +1,4 @@
 import numpy as np
-#import jax.numpy as np
 import pandas as pd
 import pkg_resources
 import matplotlib.pyplot as plt
@@ -9,13 +8,10 @@ import warnings
 # - cache function for interpolation of phytoplankton IOPs
 # - cleanup code phyto iop models
 
-# DATA_PATH = pkg_resources.resource_filename('hydropt', 'data/')
-# PHYTO_SIOP = pkg_resources.resource_filename('hydropt', 'data/phyto_siop.csv')
-# PHYTO_SC_SIOP = pkg_resources.resource_filename('hydropt', 'data/psc_absorption_se_uitz_2008.csv')
-
-PHYTO_SIOP = '/Users/tadzio/Documents/code_repo/hydropt/hydropt/data/phyto_siop.csv'
-PHYTO_SC_SIOP = '/Users/tadzio/Documents/code_repo/hydropt/hydropt/data/psc_absorption_se_uitz_2008.csv'
-H2O_IOP_DEFAULT = pd.read_csv('./data/water_mason016.csv', sep=',', index_col='wavelength')
+PHYTO_SIOP = pkg_resources.resource_filename('hydropt', 'data/phyto_siop.csv')
+PHYTO_SC_SIOP = pkg_resources.resource_filename('hydropt', 'data/psc_absorption_se_uitz_2008.csv')
+H2O_IOP_DEFAULT_STREAM = pkg_resources.resource_filename('hydropt', '/data/water_mason016.csv')
+H2O_IOP_DEFAULT = pd.read_csv(H2O_IOP_DEFAULT_STREAM, sep=',', index_col='wavelength')
 
 OLCI_WBANDS = np.array([400, 412.5, 442.5, 490, 510, 560, 620, 665, 673.75, 681.25, 708.75])
 HSI_WBANDS = np.arange(400, 711, 5)
