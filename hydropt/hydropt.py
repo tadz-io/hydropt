@@ -1,6 +1,6 @@
 import warnings
+import matplotlib.pyplot as plt
 import numpy as np
-import itertools
 import types
 import pkg_resources
 from abc import ABC, abstractmethod
@@ -8,31 +8,10 @@ from sklearn.preprocessing import PolynomialFeatures
 import pandas as pd
 from xarray import DataArray, Dataset
 from hydropt.band_models import BandModel
-#import jax.numpy as np
-#import jax
+from hydropt.utils import der_2d_polynomial
 
 PACE_POLYNOM_04_H2O_STREAM = pkg_resources.resource_filename('hydropt', 'data/PACE_polynom_04_h2o.csv')
 PACE_POLYNOM_04_H2O = pd.read_csv(PACE_POLYNOM_04_H2O_STREAM, index_col=0)
-
-def der_2d_polynomial(x, c, p):
-    '''
-    derivative of 2 variable polynomial
-
-    x: points at wich to evaluate the derivative; a nx2 array were n is number of wavebands
-    c: coefficients of the polynomial terms; a nxm matrix where n is the number wavebands and m the number of polynomial terms
-    p: exponents of the n polynomial terms; a mx2 matrix
-    '''
-    if c.shape[0] is not x.shape[0]:
-        warnings.warn('matrix dimensions of x and c do not match!')
-    # get derivative terms of polynomial features
-    d_x1 = lambda x, p: p[0]*x[0]**(float(p[0]-1))*x[1]**p[1]
-    d_x2 = lambda x, p: p[1]*x[1]**(float(p[1]-1))*x[0]**p[0]
-    # evaluate terms at [x]
-    ft = np.array([[d_x1(x,p), d_x2(x,p)] for (x,p) in zip(itertools.cycle([x.T]), p)])
-    # dot derivative matrix with polynomial coefficients and get diagonal
-    dx = np.array([np.dot(c,ft[:,0,:]).diagonal(), np.dot(c,ft[:,1,:]).diagonal()])
-    
-    return dx
 
 class Interpolator:
     '''
@@ -61,6 +40,79 @@ class Interpolator:
 
 class WavebandError(ValueError):
     pass
+
+class BioOpticalModel:
+    def __init__(self):
+        self._wavebands = None
+        self.iop_model = {}
+        self.gradient = {}
+    
+    @property
+    def wavebands(self):
+        return self._wavebands
+
+    def set_iop(self, wavebands, **kwargs):
+        if self.check_wavelen(wavebands, **kwargs):
+            self._wavebands = wavebands
+            try:
+                self.iop_model.update({k: v(None)[0] for (k, v) in kwargs.items()})
+                self.gradient.update({k: v(None)[1] for (k, v) in kwargs.items()})
+            except:
+                self.iop_model.update({k: v for (k, v) in kwargs.items()})
+    
+    def get_iop(self, **kwargs):
+        iops = []
+        for k, value in kwargs.items():
+            iops.append([self.iop_model.get(k)(value)])
+        
+        iops = np.vstack(iops)
+        
+        return iops
+
+    def get_gradient(self, **kwargs):
+        grads = []
+        for k, value in kwargs.items():
+            grads.append([self.gradient.get(k)(value)])
+        
+        grads = np.vstack(grads)
+        
+        return grads
+   
+    def sum_iop(self, incl_water=True, **kwargs):
+        if incl_water:
+            kwargs.update({'water': None})
+        iops = self.get_iop(**kwargs).sum(axis=0)
+        
+        return iops
+    
+    def plot(self, **kwargs):
+        n = len(kwargs)
+        fig, axs = plt.subplots(1,n, figsize=(14, 4))
+        # to do: clean-up loop code
+        # pass kwargs to plt.plot
+        for (k,v), ax in zip(kwargs.items(), axs):
+            ax.plot(self._wavebands, self.get_iop(**{k:v})[0][0], label='absorption')
+            ax.plot(self._wavebands, self.get_iop(**{k:v})[0][1], label='backscatter')
+            ax.set_xlabel('wavelength (nm)')
+            ax.set_ylabel('IOP ($m^{-1}$)')
+            ax.set_title(k)     
+            ax.legend()
+
+        plt.tight_layout()
+        #return fig
+        
+    @staticmethod
+    def check_wavelen(wavebands, **kwargs):
+        models = [i for i in kwargs.values()]
+        # check dimensions of models; skip gradients for now
+        dims = [i(1)[0]().shape[1] for i in models]
+        # check if all dimension match
+        if len(set(dims)) != 1:
+            raise ValueError('length of IOP vectors do not match')
+        elif dims[0] != len(wavebands):
+            raise ValueError('number of wavebands do not match with length of IOP vectors')
+        
+        return True
 
 class ReflectanceModel(ABC):
     ''' 

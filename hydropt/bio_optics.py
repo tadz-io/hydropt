@@ -1,12 +1,7 @@
 import numpy as np
 import pandas as pd
 import pkg_resources
-import matplotlib.pyplot as plt
-import warnings
-
-# TO DO
-# - cache function for interpolation of phytoplankton IOPs
-# - cleanup code phyto iop models
+from hydropt.utils import interpolate_to_wavebands
 
 PHYTO_SIOP = pkg_resources.resource_filename('hydropt', 'data/phyto_siop.csv')
 PHYTO_SC_SIOP = pkg_resources.resource_filename('hydropt', 'data/psc_absorption_se_uitz_2008.csv')
@@ -16,32 +11,6 @@ H2O_IOP_DEFAULT = pd.read_csv(H2O_IOP_DEFAULT_STREAM, sep=',', index_col='wavele
 OLCI_WBANDS = np.array([400, 412.5, 442.5, 490, 510, 560, 620, 665, 673.75, 681.25, 708.75])
 HSI_WBANDS = np.arange(400, 711, 5)
 WBANDS = OLCI_WBANDS
-
-def interpolate_to_wavebands(data, wavelength, index='wavelength'):
-    '''
-    data - pandas df where index is wavelength and columns are SIOPs
-    wavelength - wavelengths used to interpolate SIOPs
-    '''
-    data.reset_index(inplace=True)
-    # add OLCI/MERIS wavebands to phytop SIOP wavelengths
-    wband_merge = np.unique(sorted(np.append(data[index], wavelength)))
-
-    data.set_index(index, inplace=True)
-    #.interpolate(method='slinear', fill_value=0, limit_direction='both')\
-    data = data.reindex(wband_merge)\
-        .astype(float)\
-        .interpolate()\
-        .reindex(wavelength)
-
-    warnings.warn('changed interpolation method')
-
-    return data
-
-def waveband_wrapper(f, wb):
-    def inner(*args, **kwargs):
-        kwargs['wb'] = wb
-        return f(*args, **kwargs)
-    return inner
 
 # load phytoplankton basis vector
 a_phyto_base_full = pd.read_csv(PHYTO_SIOP, sep=';', index_col=0)
@@ -220,114 +189,3 @@ def micro(*args):
         return np.array([d_a.reshape(-1), d_bb])
     
     return iop, gradient
-
-class BioOpticalModel:
-    def __init__(self):
-        self._wavebands = None
-        self.iop_model = {}
-        self.gradient = {}
-    
-    @property
-    def wavebands(self):
-        return self._wavebands
-
-    def set_iop(self, wavebands, **kwargs):
-        if self.check_wavelen(wavebands, **kwargs):
-            self._wavebands = wavebands
-            try:
-                self.iop_model.update({k: v(None)[0] for (k, v) in kwargs.items()})
-                self.gradient.update({k: v(None)[1] for (k, v) in kwargs.items()})
-            except:
-                self.iop_model.update({k: v for (k, v) in kwargs.items()})
-    
-    def get_iop(self, **kwargs):
-        iops = []
-        for k, value in kwargs.items():
-            iops.append([self.iop_model.get(k)(value)])
-        
-        iops = np.vstack(iops)
-        
-        return iops
-
-    def get_gradient(self, **kwargs):
-        grads = []
-        for k, value in kwargs.items():
-            grads.append([self.gradient.get(k)(value)])
-        
-        grads = np.vstack(grads)
-        
-        return grads
-   
-    def sum_iop(self, incl_water=True, **kwargs):
-        if incl_water:
-            kwargs.update({'water': None})
-        iops = self.get_iop(**kwargs).sum(axis=0)
-        
-        return iops
-    
-    def plot(self, **kwargs):
-        n = len(kwargs)
-        fig, axs = plt.subplots(1,n, figsize=(14, 4))
-        # to do: clean-up loop code
-        # pass kwargs to plt.plot
-        for (k,v), ax in zip(kwargs.items(), axs):
-            ax.plot(self._wavebands, self.get_iop(**{k:v})[0][0], label='absorption')
-            ax.plot(self._wavebands, self.get_iop(**{k:v})[0][1], label='backscatter')
-            ax.set_xlabel('wavelength (nm)')
-            ax.set_ylabel('IOP ($m^{-1}$)')
-            ax.set_title(k)     
-            ax.legend()
-
-        plt.tight_layout()
-        #return fig
-        
-    @staticmethod
-    def check_wavelen(wavebands, **kwargs):
-        models = [i for i in kwargs.values()]
-        # check dimensions of models; skip gradients for now
-        dims = [i(1)[0]().shape[1] for i in models]
-        # check if all dimension match
-        if len(set(dims)) != 1:
-            raise ValueError('length of IOP vectors do not match')
-        elif dims[0] != len(wavebands):
-            raise ValueError('number of wavebands do not match with length of IOP vectors')
-        
-        return True
-    
-class ThreeCompModel(BioOpticalModel):
-    def __init__(self):
-        super().__init__()
-        self.set_iop(HSI_WBANDS,
-                     nap=waveband_wrapper(nap, wb=HSI_WBANDS),
-                     cdom=waveband_wrapper(cdom, wb=HSI_WBANDS),
-                     chl=phyto)
-        
-class FiveCompModel(BioOpticalModel):
-    ''' 
-    5 component IOP model:
-    
-    cdom, nap, pico, nano , micro
-    '''
-    def __init__(self):
-        super().__init__()
-        self.set_iop(WBANDS,
-                    nap=waveband_wrapper(nap, wb=WBANDS),
-                    cdom=waveband_wrapper(cdom, wb=WBANDS),
-                    pico=pico,
-                    nano=nano,
-                    micro=micro)
-        
-class ThreeCompModel_OLCI(BioOpticalModel):
-    def __init__(self):
-        super().__init__()
-        self.set_iop(OLCI_WBANDS,
-                     nap=waveband_wrapper(nap, wb=OLCI_WBANDS),
-                     cdom=waveband_wrapper(cdom, wb=OLCI_WBANDS),
-                     chl=phyto_olci)
-
-class TwoCompModel(BioOpticalModel):
-    def __init__(self):
-        super().__init__()
-        self.set_iop(OLCI_WBANDS,
-                     nap=waveband_wrapper(nap, wb=OLCI_WBANDS),
-                     cdom=waveband_wrapper(cdom, wb=OLCI_WBANDS))
