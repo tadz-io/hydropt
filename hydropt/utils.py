@@ -47,3 +47,17 @@ def der_2d_polynomial(x, c, p):
     dx = np.array([np.dot(c,ft[:,0,:]).diagonal(), np.dot(c,ft[:,1,:]).diagonal()])
     
     return dx
+
+def recurse(x, f_args=np.nan):
+    n = []
+    def inner(x):
+        for (k,v) in x.items():
+            if callable(v):
+                inner({k: v(f_args)})
+            elif isinstance(v, np.ndarray):
+                n.append([v])
+            else:
+                raise ValueError('models should return np.array')
+    inner(x)
+
+    return np.vstack(n)

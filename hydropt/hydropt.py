@@ -8,10 +8,18 @@ from sklearn.preprocessing import PolynomialFeatures
 import pandas as pd
 from xarray import DataArray, Dataset
 from hydropt.band_models import BandModel
-from hydropt.utils import der_2d_polynomial
+from hydropt.utils import der_2d_polynomial, recurse
 
 PACE_POLYNOM_04_H2O_STREAM = pkg_resources.resource_filename('hydropt', 'data/PACE_polynom_04_h2o.csv')
 PACE_POLYNOM_04_H2O = pd.read_csv(PACE_POLYNOM_04_H2O_STREAM, index_col=0)
+
+def _check_dims(**kwargs):
+    models = [i for i in kwargs.values()]
+    # check if all are functions
+    if not all([callable(i) for i in models]):
+        raise ValueError('not all models are callable')
+    # check return values of models
+    models_list = [i for j in models for i in j]
 
 class Interpolator:
     '''
@@ -52,14 +60,13 @@ class BioOpticalModel:
         return self._wavebands
 
     def set_iop(self, wavebands, **kwargs):
-        if self.check_wavelen(wavebands, **kwargs):
-            self._wavebands = wavebands
-            try:
-                self.iop_model.update({k: v(None)[0] for (k, v) in kwargs.items()})
-                self.gradient.update({k: v(None)[1] for (k, v) in kwargs.items()})
-            except:
-                self.iop_model.update({k: v for (k, v) in kwargs.items()})
-    
+        self._wavebands = wavebands
+        try:
+            self.iop_model.update({k: v(None)[0] for (k, v) in kwargs.items()})
+            self.gradient.update({k: v(None)[1] for (k, v) in kwargs.items()})
+        except:
+            self.iop_model.update({k: v for (k, v) in kwargs.items()})
+
     def get_iop(self, **kwargs):
         iops = []
         for k, value in kwargs.items():
@@ -87,7 +94,7 @@ class BioOpticalModel:
     
     def plot(self, **kwargs):
         n = len(kwargs)
-        fig, axs = plt.subplots(1,n, figsize=(14, 4))
+        _, axs = plt.subplots(1,n, figsize=(14, 4))
         # to do: clean-up loop code
         # pass kwargs to plt.plot
         for (k,v), ax in zip(kwargs.items(), axs):
@@ -99,20 +106,21 @@ class BioOpticalModel:
             ax.legend()
 
         plt.tight_layout()
-        #return fig
         
-    @staticmethod
-    def check_wavelen(wavebands, **kwargs):
-        models = [i for i in kwargs.values()]
+    def _check_dims(self, **kwargs):
+        # gather model outputs
+        values = recurse(kwargs)
+        
+        pass
         # check dimensions of models; skip gradients for now
-        dims = [i(1)[0]().shape[1] for i in models]
-        # check if all dimension match
-        if len(set(dims)) != 1:
-            raise ValueError('length of IOP vectors do not match')
-        elif dims[0] != len(wavebands):
-            raise ValueError('number of wavebands do not match with length of IOP vectors')
+        # dims = [i(1)[0]().shape[1] for i in iop_models]
+        # # check if all dimension match
+        # if len(set(dims)) != 1:
+        #     raise ValueError('length of IOP vectors do not match')
+        # elif dims[0] != len(self._wavebands):
+        #     raise ValueError('number of wavebands do not match with length of IOP vectors')
         
-        return True
+        # return True
 
 class ReflectanceModel(ABC):
     ''' 
@@ -170,11 +178,9 @@ class ForwardModel:
     def forward(self, **x):
         if self.__cache:
             self.refl_model = self.refl_model.interpolate(self.iop_model.wavebands)
-            self.__cache = False
-            
+            self.__cache = False         
         iops = self.iop_model.sum_iop(**x)
-        self._validate_bounds(x)
-        
+        self._validate_bounds(x)      
         #for jax.jacfwd/jacrev uncomment line below
         #return self.refl_model.forward(iops)
         return pd.Series(self.refl_model.forward(iops), index=self.iop_model.wavebands)
