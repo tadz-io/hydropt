@@ -106,21 +106,24 @@ class BioOpticalModel:
             ax.legend()
 
         plt.tight_layout()
+
+    @ staticmethod    
+    def _check_dims(wavebands, **kwargs):
+        try:
+            # gather model outputs
+            array_shape = recurse(kwargs.values()).shape
+        except ValueError as exp:
+            raise ValueError('IOP model dimension do not match. {}'.format(exp))
         
-    def _check_dims(self, **kwargs):
-        # gather model outputs
-        values = recurse(kwargs)
-        
-        pass
-        # check dimensions of models; skip gradients for now
-        # dims = [i(1)[0]().shape[1] for i in iop_models]
-        # # check if all dimension match
-        # if len(set(dims)) != 1:
-        #     raise ValueError('length of IOP vectors do not match')
-        # elif dims[0] != len(self._wavebands):
-        #     raise ValueError('number of wavebands do not match with length of IOP vectors')
-        
-        # return True
+        if array_shape == (len(kwargs.keys()), 2, 2, len(wavebands)):
+            n = 2
+        elif array_shape == (len(kwargs.keys()), 2, len(wavebands)):
+            n = 1
+        else:
+            raise ValueError('IOP model dimension do not match.')
+
+        return n
+
 
 class ReflectanceModel(ABC):
     ''' 
