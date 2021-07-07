@@ -46,7 +46,6 @@ test_cases = {
         ]
 
 }
-
 class TestRecurse(unittest.TestCase):
     def test_unequal_dims(self):      
         for i in test_cases.get('unequal_dims'):
@@ -62,6 +61,22 @@ class TestRecurse(unittest.TestCase):
 
         for (i,j) in zip(test_cases_eq, dims):
             self.assertTupleEqual(recurse(i.values()).shape, j)
+
+class TestBioOpticalModel(unittest.TestCase):
+
+    def test_check_dims_unequal(self):
+        model = BioOpticalModel()
+        for i in test_cases.get('unequal_dims'):
+            self.assertRaises(ValueError, model._check_dims, None, **i)
+
+    def test_check_dims_equal(self):
+        model = BioOpticalModel()
+        # no. of wavebands
+        wb = [range(5), range(5), range(6)]
+        ndims = [2, 1, 1]
+        for (i,j,k) in zip(wb, test_cases.get('equal_dims'), ndims):
+            self.assertEqual(model._check_dims(i, **j), k)
+
 
 
 if __name__ == '__main__':
