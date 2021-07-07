@@ -21,27 +21,13 @@ def dummy_model_four(*args):
 
     return inner_one, inner_two
 
-class TestRecurse(unittest.TestCase):
-    def test_unequal_dims(self):
-        test_cases = [
+test_cases = {
+    'equal_dims':
+        [
             {
-                'm1': dummy_model_one,
-                'm2': dummy_model_two
+                'm1': dummy_model_four,
+                'm2': dummy_model_four
             },
-            {
-                'm1': dummy_model_one,
-                'm2': dummy_model_three
-            }
-            ]
-        
-        for i in test_cases:
-            self.assertRaises(ValueError, recurse, i)
-
-    def test_equal_dims(self):
-        test_cases = [
-            # {
-            #     'm1': dummy_model_four
-            # },
             {
                 'm1': dummy_model_one,
                 'm2': dummy_model_one
@@ -50,10 +36,33 @@ class TestRecurse(unittest.TestCase):
                 'm1': dummy_model_three,
                 'm2': dummy_model_three
             }
-            ]
-        
-        for i in test_cases:
-            self.assertIsInstance(recurse(i), np.ndarray)
+        ],
+    'unequal_dims':
+        [
+            {
+                'm1': dummy_model_one,
+                'm2': dummy_model_three  
+            }
+        ]
+
+}
+
+class TestRecurse(unittest.TestCase):
+    def test_unequal_dims(self):      
+        for i in test_cases.get('unequal_dims'):
+            self.assertRaises(ValueError, recurse, i.values())
+
+    def test_equal_dims(self):       
+        for i in test_cases.get('equal_dims'):
+            self.assertIsInstance(recurse(i.values()), np.ndarray)
+
+    def test_shape_array(self):
+        test_cases_eq = test_cases.get('equal_dims')
+        dims = [(2,2,2,5), (2,2,5), (2,2,6)]
+
+        for (i,j) in zip(test_cases_eq, dims):
+            self.assertTupleEqual(recurse(i.values()).shape, j)
+
 
 if __name__ == '__main__':
     unittest.main()
