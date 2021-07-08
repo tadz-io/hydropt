@@ -1,196 +1,352 @@
-import numpy as np
-import pandas as pd
-import collections
+import warnings
 import matplotlib.pyplot as plt
+import numpy as np
+import types
+import pkg_resources
+from abc import ABC, abstractmethod
 from sklearn.preprocessing import PolynomialFeatures
+import pandas as pd
+from xarray import DataArray, Dataset
+from hydropt.band_models import BandModel
+from hydropt.utils import der_2d_polynomial, recurse
 
-OLCI_WBANDS = np.array([400,412.5,442.5,490,510,560,620,665,673.75,681.25,708.75])
-HSI_WBANDS = np.arange(400, 711, 5)
-WBANDS = HSI_WBANDS
+PACE_POLYNOM_04_H2O_STREAM = pkg_resources.resource_filename('hydropt', 'data/PACE_polynom_04_h2o.csv')
+PACE_POLYNOM_04_H2O = pd.read_csv(PACE_POLYNOM_04_H2O_STREAM, index_col=0)
 
-def interpolate_to_wavebands(data, wavelength, index='wavelength'):
-    '''
-    data - pandas df where index is wavelength and columns are SIOPs
-    wavelength - wavelengths used to interpolate SIOPs
-    '''
-    data.reset_index(inplace=True)
-    # add OLCI/MERIS wavebands to phytop SIOP wavelengths
-    wband_merge = np.unique(sorted(np.append(data[index], wavelength)))
+def check_iop_dims(wavebands, **kwargs):
+    try:
+        # gather model outputs
+        array_shape = recurse(kwargs.values()).shape
+    except ValueError as exp:
+        raise ValueError('IOP model dimension do not match. {}'.format(exp))
     
-    data.set_index(index, inplace=True)
-    data = data.reindex(wband_merge)\
-        .astype(float)\
-        .interpolate(method='slinear', fill_value=0, limit_direction='both')\
-        .reindex(wavelength)
-    
-    return data
+    if array_shape == (len(kwargs.keys()), 2, 2, len(wavebands)):
+        n = 2
+    elif array_shape == (len(kwargs.keys()), 2, len(wavebands)):
+        n = 1
+    else:
+        raise ValueError('IOP model dimension do not match.')
 
-def nap(*args):
+    return n
+
+class Interpolator:
     '''
-    IOP model for NAP
+    see descriptors: 
+    https://stackoverflow.com/questions/55511445/how-to-pass-self-to-a-method-like-object-in-python
     '''
-    # vectorized
-    def iop(spm=args):
-        return spm*np.array([(.041*.75*np.exp(-.0123*(WBANDS-443))), .014*0.57*(550/WBANDS)])
-    
-    def gradient():
-        d_a = .03075*np.exp(-.0123*(WBANDS-443))
-        d_b = .014*0.57*(550/WBANDS)
+    def __init__(self, dims, method='linear'):
+        self.dims = dims
+        self.method = method
+
+    def interpolate(self, da, xnew):
+        return da.interp(**{self.dims: xnew}, method=self.method)
+
+    def __call__(self, _instance, xnew):
+        instance = _instance.__class__()
+        # copy attributes
+        instance.__dict__.update(_instance.__dict__)
+        # replace _parameters w. interpolated values
+        setattr(instance, '_parameters', self.interpolate(instance._parameters, xnew))
+
+        return instance
+
+    def __get__(self, instance, owner):
+        return types.MethodType(self, instance) if instance else self
         
-        return np.array([d_a, d_b])
-    
-    return iop, gradient
 
-def cdom(*args):
-    '''
-    IOP model for CDOM
-    '''
-    def iop(a_440=args):
-        return np.array([a_440*np.exp(-0.017*(WBANDS-440)), np.zeros(len(WBANDS))])
-    
-    def gradient():
-        '''
-        Gradient of CDOM IOP model
-        ''' 
-        d_a = np.exp(-.017*(WBANDS-440))
-        d_b = np.zeros(len(d_a))
-        
-        return np.array([d_a, d_b])
-    
-    return iop, gradient
+class WavebandError(ValueError):
+    pass
 
-def phyto(*args):
-    '''
-    IOP model for phytoplankton w. 
-    packaging effect - according to Prieur&Sathyenadrath (1981)
-    basis vector - according to Ciotti&Cullen 2002
-    '''
-    # load phytoplankton basis vector
-    a_phyto_base = pd.read_csv('./hydropt/data/phyto_siop.csv', sep=';', index_col=0)
-    # interpolate to OLCI wavebands
-    a_phyto_base = interpolate_to_wavebands(data=a_phyto_base, wavelength=WBANDS)
-    # remove negative absorption values and set to 0
-    #a_phyto_base.loc[708.75] = 0
-    
-    def iop(chl=args):
-        # calculate absorption
-        a = 0.06*np.power(chl,.65)*a_phyto_base.absorption.values
-        # calculate backscatter according to 0.1-tadzio-IOP_backscatter
-        # notebook in hydropt-4-sent3
-        b = np.repeat(.014*0.18*np.power(chl,.471), len(a))
-        
-        return np.array([a, b])
-    
-    def gradient():
-        return None
-    
-    return iop, gradient
-
-class IOP_model:
+class BioOpticalModel:
     def __init__(self):
         self._wavebands = None
-        self.iop_model = None
+        self.iop_model = {}
+        self.gradient = {}
     
+    @property
+    def wavebands(self):
+        return self._wavebands
+
     def set_iop(self, wavebands, **kwargs):
-        if self.check_wavelen(wavebands, **kwargs):
-            self._wavebands = wavebands
-            self.iop_model = {k: v for (k,v) in kwargs.items()}
-    
+        ndims = check_iop_dims(wavebands, **kwargs)
+        self._wavebands = wavebands
+        # clear iop models and gradients
+        self.iop_model = {}
+        self.gradient = {}
+        if ndims == 1:
+            self.iop_model.update({k: v for (k, v) in kwargs.items()})
+        elif ndims == 2:
+            self.iop_model.update({k: v(None)[0] for (k, v) in kwargs.items()})
+            self.gradient.update({k: v(None)[1] for (k, v) in kwargs.items()})
+
+
     def get_iop(self, **kwargs):
         iops = []
         for k, value in kwargs.items():
-            iops.append([self.iop_model.get(k)(value)[0]()])
+            iops.append([self.iop_model.get(k)(value)])
         
         iops = np.vstack(iops)
         
         return iops
-   
+
     def get_gradient(self, **kwargs):
         grads = []
         for k, value in kwargs.items():
-            grads.append(self.iop_model.get(k)(value)[1]())
+            grads.append([self.gradient.get(k)(value)])
         
         grads = np.vstack(grads)
         
         return grads
-    
-    def sum_iop(self, **kwargs):
+   
+    def sum_iop(self, incl_water=True, **kwargs):
+        if incl_water:
+            kwargs.update({'water': None})
         iops = self.get_iop(**kwargs).sum(axis=0)
         
         return iops
     
     def plot(self, **kwargs):
         n = len(kwargs)
-        fig, axs = plt.subplots(1,n, figsize=(14,4))
-        # clean-up loop code
+        _, axs = plt.subplots(1,n, figsize=(14, 4))
+        # to do: clean-up loop code
+        # pass kwargs to plt.plot
         for (k,v), ax in zip(kwargs.items(), axs):
-            ax2 = ax.twinx()
-            ax.plot(self._wavebands, self.get_iop(**{k:v})[0][0])
-            ax.set_xlabel('wavelength')
-            ax.set_ylabel('absorption')
-            ax.set_title(k)
-            ax2.plot(self._wavebands, self.get_iop(**{k:v})[0][1], color='blue')
-            ax2.set_ylabel('backscatter')
+            ax.plot(self._wavebands, self.get_iop(**{k:v})[0][0], label='absorption')
+            ax.plot(self._wavebands, self.get_iop(**{k:v})[0][1], label='backscatter')
+            ax.set_xlabel('wavelength (nm)')
+            ax.set_ylabel('IOP ($m^{-1}$)')
+            ax.set_title(k)     
+            ax.legend()
+
         plt.tight_layout()
-        #return fig
-        
-    @staticmethod
-    def check_wavelen(wavebands, **kwargs):
-        models = [i for i in kwargs.values()]
-        # check dimensions of models; skip gradients for now
-        dims = [i(1)[0]().shape[1] for i in models]
-        # check if all dimension match
-        if len(set(dims)) != 1:
-            raise ValueError('length of IOP vectors do not match')
-        elif dims[0] != len(wavebands):
-            raise ValueError('number of wavebands do not match with length of IOP vectors')
-        
-        return True
+
+class ReflectanceModel(ABC):
+    ''' 
+    rename ForwardModel -> ReflectanceModel
+    '''
+    @property
+    @abstractmethod
+    def _domain(self):
+        pass
     
-class ThreeCompModel(IOP_model):
-    def __init__(self):
-        self.set_iop(WBANDS, nap=nap, cdom=cdom, chl=phyto)
-    
-class Hydropt:
-    def __init__(self, iop_model):
-        self.iop_model = iop_model
-        self.model_coef = None
-        self.model_powers = None
-        self.set_model_coef()
-        
-    def set_model_coef(self):
-        model_coef = pd.read_csv('./hydropt/data/PACE_polynom_05.csv', index_col = 0)
-        # check if wavebands match
-        if np.array_equal(model_coef.index, self.iop_model._wavebands):
-            self.model_coef = model_coef
-            self.model_powers = PolynomialFeatures(degree=5).fit([[1,1]]).powers_
-        else:
-            raise ValueError('wavebands do not match number of model coefficients')
+    @abstractmethod
+    def interpolate(self, xnew):
+        '''return: instance of class'''
             
-    def hydrolight_polynom(self, x, degree=5):
-        '''
-        Forward model using polynomial fit to Hydrolight simulations
+    @abstractmethod
+    def forward(self, x):
+        pass
 
-        x[0]: total absorption at wavelength i
-        x[1]: total backscatter at wavelength i
+    @abstractmethod
+    def gradient(self, x):
+        pass
+    
+    def plot(self):
+        pass
 
-        returns Rrs
-        '''
-        # log absorption, backscatter
-        x_log = np.log(x)
+class ForwardModel:
+    '''
+    ...
+    '''
+    def __init__(self, iop_model, refl_model):
+        self.iop_model = iop_model
+        self.refl_model = refl_model
+        self.__cache = True
+        # method does nothing yet -> pass to interpolate()
+        self._method = 'linear'
+
+    @property
+    def iop_model(self):
+        return self.__iop_model
+
+    @iop_model.setter
+    def iop_model(self, m):
+        self.__iop_model = m
+        self.__cache = True
+
+    @property
+    def refl_model(self):      
+        return self.__refl_model
+
+    @refl_model.setter
+    def refl_model(self, m):
+        self.__refl_model = m
+        self.__cache = True
+    
+    def forward(self, **x):
+        if self.__cache:
+            self.refl_model = self.refl_model.interpolate(self.iop_model.wavebands)
+            self.__cache = False         
+        iops = self.iop_model.sum_iop(**x)
+        self._validate_bounds(x)      
+        #for jax.jacfwd/jacrev uncomment line below
+        #return self.refl_model.forward(iops)
+        return pd.Series(self.refl_model.forward(iops), index=self.iop_model.wavebands)
+    
+    def jacobian(self, **x):
+        # init empty jacobian matrix
+        jac = np.empty([self.iop_model.wavebands.size, len(x)])
+        # calculate total a & bb
+        iops = self.iop_model.sum_iop(**x)
+        # get gradient of bio-optical models
+        grad_iops = self.iop_model.get_gradient(**x)
+        # get gradient of reflectance model
+        grad_refl_model = self.refl_model.gradient(iops)
+        # use tensor product instead?
+        for c, (i,j) in enumerate(zip(grad_refl_model.T, grad_iops.T)):
+            #for jax.jacfwd/jacrev uncomment line below
+            #jac = jax.ops.index_update(jac, jax.ops.index[c], np.dot(i, j))
+            jac[c] = np.dot(i,j)
+        
+        return jac
+
+    def _validate_bounds(self, x):
+        pass
+
+
+class PolynomialReflectance(ReflectanceModel):
+
+    _parameters = DataArray(PACE_POLYNOM_04_H2O)
+    _domain = None
+    _powers = PolynomialFeatures(degree=4).fit([[1,1]]).powers_
+    interpolate = Interpolator(dims='wavelength')
+
+    def forward(self, x):
+        c = self._parameters.values
+        x = np.log(x)
         # get polynomial features
-        ft = PolynomialFeatures(degree=degree).fit_transform(x_log.T)
-        # get polynomial coefficients
-        c = self.model_coef
+        #ft = PolynomialFeatures(degree=5).fit_transform(x.T)
+        ft = self._polynomial_features(x.T)
         # calculate log(Rrs)
         log_rrs = np.dot(c, ft.T).diagonal()
-        # calculate Rrs
-        rrs = np.exp(log_rrs)
 
-        return rrs
+        return np.exp(log_rrs)
+
+    def gradient(self, x):
+        # evaluate derivative of 2d polynomial at ln(x)
+        d_p = der_2d_polynomial(np.log(x.T), self._parameters.values, self._powers)
+        # dln(a)/da = 1/a
+        d_a = 1/x[0]
+        # dln(bb)/dbb = 1/bb
+        d_bb = 1/x[1]
+        # dRrs/dln(Rrs) = Rrs
+        rrs = self.forward(x)
+        # full gradient
+        dx = rrs*d_p*np.array([d_a, d_bb])
+
+        return dx
+
+    def _polynomial_features(self, x):
+        x = x.T
+        f = np.array([(x[0]**i)*(x[1]**j) for (i,j) in self._powers]).T
+
+        return f
+
+class PolynomialForward(ForwardModel):
+    def __init__(self, iop_model):
+        super().__init__(iop_model, PolynomialReflectance())
+
+
+def _residual(x, y, f, w):
+    '''weighted residuals'''
     
-    def forward(self, **kwargs):
-        # calculate total absorption/backscatter
-        iop = self.iop_model.sum_iop(**kwargs)
+    return (f(**x)-y)/(1/np.sqrt(w))
+
+
+class ValidationDataset:
+
+    def __init__(self, fwd_model):
+        self.fwd_model = fwd_model
+
+    def create(self, wt):
+        ''' create validation set
+
+        wt - str indicating watertype: c1, c2 etc..
+        '''
+
+        pass
+
+def _to_dataset(func):
+    '''
+    make this a validation set decorator
+
+    to do: take extra argument of observed concentration and calculate
+    rrs -> add noise -> invert using .invert() -> create validation set
+
+    let this function create the synthetic dataset and invert it -> return the validation set:
+    observed vs. predicted
+    '''
+    def wrapper(*args, **kwargs):
+        '''
+        m - InversionModel instance
+        x, y, w - see InversionModel
+        '''
+        stat_vars = ['chisqr', 'redchi', 'aic', 'bic']
+        fwd_model = args[0]._fwd_model.forward 
+        iop_model = args[0]._fwd_model.iop_model
+        # do inversion
+        out = func(*args, **kwargs)
+        # get estimates
+        x_hat = {i: float(j) for i,j in out.params.items()}
+        rrs_hat = fwd_model(**x_hat)
+        iop_hat = iop_model.get_iop(**x_hat)
+        # organize data in dict
+        data = {
+            'rrs': (['wavelength'], rrs_hat),
+            'iops': (['comp', 'iop', 'wavelength'], iop_hat),
+            'conc': (['comp'], [i for i in x_hat.values()]),
+            'weights': (['wavelength'], kwargs.get('w', np.repeat(1, len(rrs_hat))))}
+        # add stats
+        data.update({i: getattr(out, i) for i in stat_vars})   
+        # iop_hat = {k: v for k,v in zip(x_hat.keys(), iop_model.get_iop(**x_hat))}
+        # calculate standard-error
+        try:
+            data.update({'std_error': (['comp'], np.sqrt(getattr(out, 'covar').diagonal()))})
+        except AttributeError:
+            data.update({'std_error': (['comp'], np.repeat(np.nan, len(x_hat)))})
+        # set coordinates
+        coords = {
+            'wavelength': iop_model.wavebands,
+            'comp': [i for i in x_hat.keys()],
+            'iop': ['absorption', 'backscatter']}
         
-        return self.hydrolight_polynom(iop)
+        return Dataset(data, coords=coords)
+    
+    return wrapper
+
+ 
+class InversionModel:
+    def __init__(self, fwd_model, minimizer, loss=_residual, band_model='rrs'):
+        self._fwd_model = fwd_model
+        self._minimizer = minimizer
+        self._loss = loss
+        self._band_model = BandModel(band_model)
+
+    @_to_dataset
+    def invert(self, y, x, w=1, jac=False):
+        ''' 
+        x - initial guess
+        y - rrs to invert
+        w - weights to wavebands
+        jac - use analytical expression of jacobian if available
+
+        https://stackoverflow.com/questions/51883058/l1-norm-instead-of-l2-norm-for-cost-function-in-regression-model
+        '''
+        loss_fun = lambda x, y, f: self._loss(dict(x.valuesdict()), y, f, w)
+        if jac:
+            # parse lmfit.Parameters to dict for jacobian method argument
+            jac_fun = lambda x, y, f: self._fwd_model.jacobian(**dict(x.valuesdict()))
+        else:
+            jac_fun = None
+        # apply band-transformation on y and model
+        args = self._band_model((y, self._fwd_model.forward))
+        # do optimization
+        xhat = self._minimizer(loss_fun, x, args=args, Dfun=jac_fun)
+        warnings.warn('''no band transformation is applied to jacobian -
+         o.k. when band_model = 'rrs' ''')
+        
+        return xhat
+
+    @property
+    def iop_model(self):
+        return self._fwd_model.iop_model.iop_model
