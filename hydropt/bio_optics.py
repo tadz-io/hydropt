@@ -37,7 +37,7 @@ a_pico_base = interpolate_to_wavebands(data=pico_siop, wavelength=WBANDS)
 a_nano_base = interpolate_to_wavebands(data=nano_siop, wavelength=WBANDS)
 a_micro_base = interpolate_to_wavebands(data=micro_siop, wavelength=WBANDS)
 
-def h2o(*args):
+def clear_nat_water(*args):
     '''
     IOP model for clear natural water
     '''
@@ -45,7 +45,7 @@ def h2o(*args):
         return H2O_IOP_DEFAULT.T.values
 
     def gradient(*args):
-        return None
+        return np.full(H2O_IOP_DEFAULT.T.shape, np.nan)
 
     return iop, gradient
 
