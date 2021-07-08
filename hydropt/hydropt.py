@@ -1,4 +1,3 @@
-from logging import warn
 import warnings
 import matplotlib.pyplot as plt
 import numpy as np
