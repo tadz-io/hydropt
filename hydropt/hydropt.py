@@ -1,3 +1,4 @@
+from logging import warn
 import warnings
 import matplotlib.pyplot as plt
 import numpy as np
@@ -13,13 +14,21 @@ from hydropt.utils import der_2d_polynomial, recurse
 PACE_POLYNOM_04_H2O_STREAM = pkg_resources.resource_filename('hydropt', 'data/PACE_polynom_04_h2o.csv')
 PACE_POLYNOM_04_H2O = pd.read_csv(PACE_POLYNOM_04_H2O_STREAM, index_col=0)
 
-def _check_dims(**kwargs):
-    models = [i for i in kwargs.values()]
-    # check if all are functions
-    if not all([callable(i) for i in models]):
-        raise ValueError('not all models are callable')
-    # check return values of models
-    models_list = [i for j in models for i in j]
+def check_iop_dims(wavebands, **kwargs):
+    try:
+        # gather model outputs
+        array_shape = recurse(kwargs.values()).shape
+    except ValueError as exp:
+        raise ValueError('IOP model dimension do not match. {}'.format(exp))
+    
+    if array_shape == (len(kwargs.keys()), 2, 2, len(wavebands)):
+        n = 2
+    elif array_shape == (len(kwargs.keys()), 2, len(wavebands)):
+        n = 1
+    else:
+        raise ValueError('IOP model dimension do not match.')
+
+    return n
 
 class Interpolator:
     '''
@@ -60,12 +69,17 @@ class BioOpticalModel:
         return self._wavebands
 
     def set_iop(self, wavebands, **kwargs):
+        ndims = check_iop_dims(wavebands, **kwargs)
         self._wavebands = wavebands
-        try:
+        # clear iop models and gradients
+        self.iop_model = {}
+        self.gradient = {}
+        if ndims == 1:
+            self.iop_model.update({k: v for (k, v) in kwargs.items()})
+        elif ndims == 2:
             self.iop_model.update({k: v(None)[0] for (k, v) in kwargs.items()})
             self.gradient.update({k: v(None)[1] for (k, v) in kwargs.items()})
-        except:
-            self.iop_model.update({k: v for (k, v) in kwargs.items()})
+
 
     def get_iop(self, **kwargs):
         iops = []
@@ -106,24 +120,6 @@ class BioOpticalModel:
             ax.legend()
 
         plt.tight_layout()
-
-    @ staticmethod    
-    def _check_dims(wavebands, **kwargs):
-        try:
-            # gather model outputs
-            array_shape = recurse(kwargs.values()).shape
-        except ValueError as exp:
-            raise ValueError('IOP model dimension do not match. {}'.format(exp))
-        
-        if array_shape == (len(kwargs.keys()), 2, 2, len(wavebands)):
-            n = 2
-        elif array_shape == (len(kwargs.keys()), 2, len(wavebands)):
-            n = 1
-        else:
-            raise ValueError('IOP model dimension do not match.')
-
-        return n
-
 
 class ReflectanceModel(ABC):
     ''' 
