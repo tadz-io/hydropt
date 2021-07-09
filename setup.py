@@ -1,7 +1,9 @@
 from setuptools import setup
+import versioneer
 
 setup(name='hydropt',
-      version='0.2',
+      version=versioneer.get_version(),
+      cmdclass=versioneer.get_cmdclass(),
       description='HYDROPT',
       url='',
       author='Tadzio Holtrop',

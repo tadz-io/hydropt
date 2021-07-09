@@ -1,5 +1,5 @@
 # HYDROPT: a Python Framework for Fast Inverse Modelling of Multi- and Hyperspectral Ocean Color Data
-![license](https://img.shields.io/github/license/tadz-io/hydropt?label=license) 
+[![license](https://img.shields.io/github/license/tadz-io/hydropt?label=license)](https://github.com/tadz-io/hydropt/blob/master/LICENSE)
 [![DOI](https://zenodo.org/badge/DOI/10.5281/zenodo.4782707.svg)](https://doi.org/10.5281/zenodo.4782707)
 
 
