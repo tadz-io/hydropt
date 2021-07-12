@@ -1,4 +1,5 @@
 ignore:
-  - tests/
-  - **/__init__.py
-  - **/_version.py
+  - "versioneer.py"
+  - "tests"
+  - "**/_version.py"
+  - "**/__init__.py"
