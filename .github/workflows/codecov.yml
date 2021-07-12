@@ -5,9 +5,9 @@ jobs:
     runs-on: ubuntu-latest
     env:
       OS: ubuntu-latest
-      PYTHON: '3.9'
+      PYTHON: '3.7'
     steps:
-    - uses: checkout@v2
+    - uses: actions/checkout@master
       with:
         fetch-depth: ‘2’
 
