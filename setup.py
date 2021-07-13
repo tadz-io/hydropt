@@ -8,7 +8,7 @@ def get_long_description():
             x for x in buffer.split("\n") if "<!-- ignore_ppi -->" not in x
         )
     try:
-        fpath = "../README.md"
+        fpath = "README.md"
         with open(fpath, encoding="utf-8") as f:
             readme = f.read()
             desc = readme.partition("<!-- start_ppi_description -->")[2]
