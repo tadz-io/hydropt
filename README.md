@@ -108,7 +108,7 @@ Now we can initialize the HYDROPT forward model with the bio-optical model, ```b
 # the HYDROPT polynomial forward model
 fwd_model = hd.PolynomialForward(bio_opt)
 # calculate Rrs
-rrs = fwd_model(phyto=.15, cdom=.02)
+rrs = fwd_model.forward(phyto=.15, cdom=.02)
 ```
 
 Lets invert the R<sub>rs</sub> spectrum we just calculated with the specified forward model ```fwd_model```. At this point HYDROPT only supports the Levenberg-Marquardt routine from the ```LMFIT``` library (```lmfit.minimize```). Please refer to the [LMFIT documentation](https://lmfit.github.io/lmfit-py/) for more information. 
