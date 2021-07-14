@@ -17,7 +17,7 @@ def get_long_description():
     except IOError:
         return None
 
-setup(name='hydropt',
+setup(name='hydropt-oc',
       version=versioneer.get_version(),
       cmdclass=versioneer.get_cmdclass(),
       url='https://github.com/tadz-io/hydropt',
