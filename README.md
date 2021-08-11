@@ -11,9 +11,9 @@ HYDROPT is an open-source framework for forward and inverse modelling of multi- 
 
 Inversion of R<sub>rs</sub> spectra is achieved by minimizing the difference between the HYDROPT forward calculations and the reflectance measured by the sensor. Different optimization routines can be selected to minimize the cost function. An extensive description of the theoretical basis of the framework as well as applications are provided in the following scientific papers:
 
-> Holtrop, T. & Van Der Woerd, H.J. (*pre-print*) HYDROPT: An open-source framework for fast inverse modelling of multi- and hyperspectral observations from oceans, coastal and inland waters, **2021**. [doi:10.13140/RG.2.2.12314.77768](https://www.researchgate.net/publication/352002441_HYDROPT_An_open-source_framework_for_fast_inverse_modelling_of_multi-_and_hyperspectral_observations_from_oceans_coastal_and_inland_waters?channel=doi&linkId=60b50b3492851cd0d98c7970&showFulltext=true)
+> Holtrop, T., & Van Der Woerd, H. J. (**2021**). HYDROPT: An Open-Source Framework for Fast Inverse Modelling of Multi- and Hyperspectral Observations from Oceans, Coastal and Inland Waters. *Remote Sensing*, 13(15), 3006. [doi:10.3390/rs13153006](https://www.mdpi.com/2072-4292/13/15/3006)
 
->Van Der Woerd, H.J. & Pasterkamp, R. HYDROPT: A fast and flexible method to retrieve chlorophyll-a from multispectral satellite observations of optically complex coastal waters. *Remote Sensing of Environment* **2008**, 112, 1795–1807. [doi:10.1016/j.rse.2007.09.001](https://www.sciencedirect.com/science/article/abs/pii/S003442570700421X?via%3Dihub)
+>Van Der Woerd, H.J. & Pasterkamp, R. (**2008**). HYDROPT: A fast and flexible method to retrieve chlorophyll-a from multispectral satellite observations of optically complex coastal waters. *Remote Sensing of Environment*, 112, 1795–1807. [doi:10.1016/j.rse.2007.09.001](https://www.sciencedirect.com/science/article/abs/pii/S003442570700421X?via%3Dihub)
 
 <!-- stop_ppi_description -->
 ## Features
