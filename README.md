@@ -7,7 +7,7 @@
 [![codecov](https://codecov.io/gh/tadz-io/hydropt/branch/master/graph/badge.svg?token=95Y1Z31F5C)](https://codecov.io/gh/tadz-io/hydropt)
 ## Description
 <!-- start_ppi_description -->
-HYDROPT is an open-source framework for forward and inverse modelling of multi- and hyperspectral observations from oceans, coastal and inland waters. The remote sensing reflectance, R<sub>rs</sub>, is calculated by specifying the inherent optical properties (IOP) of the water column, the sensor viewing geometry and solar zenith angle. Our framework is based on radiative transfer principles and is sensor agnostic allowing for R<sub>rs</sub> to be calculated for any wavelength in the 400 - 710 nm range. 
+HYDROPT is an open-source framework for forward and inverse modelling of multi- and hyperspectral observations from oceans, coastal and inland waters. The remote sensing reflectance, R<sub>rs</sub>, is calculated by specifying the inherent optical properties (IOP) of the water column, the sensor viewing geometry and solar zenith angle. Our framework is based on radiative transfer principles and is sensor agnostic allowing R<sub>rs</sub> to be calculated for any wavelength in the 400 - 710 $nm$ range. 
 
 Inversion of R<sub>rs</sub> spectra is achieved by minimizing the difference between the HYDROPT forward calculations and the reflectance measured by the sensor. Different optimization routines can be selected to minimize the cost function. An extensive description of the theoretical basis of the framework as well as applications are provided in the following scientific papers:
 
@@ -16,10 +16,29 @@ Inversion of R<sub>rs</sub> spectra is achieved by minimizing the difference bet
 >Van Der Woerd, H.J. & Pasterkamp, R. (**2008**). HYDROPT: A fast and flexible method to retrieve chlorophyll-a from multispectral satellite observations of optically complex coastal waters. *Remote Sensing of Environment*, 112, 1795–1807. [doi:10.1016/j.rse.2007.09.001](https://www.sciencedirect.com/science/article/abs/pii/S003442570700421X?via%3Dihub)
 
 <!-- stop_ppi_description -->
+
+Please cite our latest publication if you decide to use HYDROPT in your research:
+
+```
+@article{
+    Holtrop_2021,
+    title={HYDROPT: An Open-Source Framework for Fast Inverse Modelling of Multi- and Hyperspectral Observations from Oceans, Coastal and Inland Waters},
+    author={Holtrop, Tadzio and Van Der Woerd, Hendrik Jan},
+    journal={Remote Sensing}, 
+    volume={13},
+    number={15}, 
+    month={Jul}, 
+    pages={3006},
+    year={2021}, 
+    DOI={10.3390/rs13153006}, 
+    publisher={MDPI AG}
+}
+```
+
 ## Features
 
 - Specification of IOP models for forward and inverse modelling
-- Sensor agnostic calculations of R<sub>rs</sub> in 400 - 710 nm range
+- Sensor agnostic calculations of R<sub>rs</sub> in 400 - 710 $nm$ range
 - Calculation of R<sub>rs</sub> at nadir; off-nadir angles will be implemented in the future
 - Specification of solar zenith angle will be implemented in the future (30 degrees sza by default)
 - Levenberg-Marquardt optimization is used for the inversion; future versions will be able to select the full range of optimization routines offered in ```SciPy``` and ```LMFIT``` libraries.
