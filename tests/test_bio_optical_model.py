@@ -122,9 +122,6 @@ class TestBioOpticalModel(unittest.TestCase):
         np.testing.assert_array_equal(self.bom.sum_iop(), clear_nat_water(None)[0]())
         np.testing.assert_array_equal(self.bom.sum_iop(m2=2), clear_nat_water(None)[0]()+2)
         np.testing.assert_array_equal(self.bom.sum_iop(m2=2, incl_water=False), dummy_model_full(2)[0]())
-        pass
-
-
 
 if __name__ == '__main__':
     unittest.main()
