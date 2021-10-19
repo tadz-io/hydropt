@@ -102,7 +102,10 @@ def phyto(*args):
     
     def gradient(*args):
         '''dummy gradient function'''
-        return np.zeros([2,63])
+        d_a = .06*a_phyto_base_HSI.absorption.values
+        d_bb = np.repeat(.014*0.18, len(d_a))
+        
+        return np.array([d_a, d_bb])
     
     return iop, gradient
 
