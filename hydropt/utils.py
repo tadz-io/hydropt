@@ -38,9 +38,11 @@ def der_2d_polynomial(x, c, p):
     '''
     if c.shape[0] is not x.shape[0]:
         warnings.warn('matrix dimensions of x and c do not match!')
+    # derivative of powers and truncate to positive floats
+    p_trunc = lambda p: float(max(0, p-1))
     # get derivative terms of polynomial features
-    d_x1 = lambda x, p: p[0]*x[0]**(float(p[0]-1))*x[1]**p[1]
-    d_x2 = lambda x, p: p[1]*x[1]**(float(p[1]-1))*x[0]**p[0]
+    d_x1 = lambda x, p: p[0]*x[0]**(p_trunc(p[0]))*x[1]**p[1]
+    d_x2 = lambda x, p: p[1]*x[1]**(p_trunc(p[1]))*x[0]**p[0]
     # evaluate terms at [x]
     ft = np.array([[d_x1(x,p), d_x2(x,p)] for (x,p) in zip(itertools.cycle([x.T]), p)])
     # dot derivative matrix with polynomial coefficients and get diagonal
@@ -67,3 +69,45 @@ def recurse(x, f_args=np.nan):
     out = inner(x)
 
     return np.array(out)
+
+def to_xarray_dataset(func):
+    '''
+    wrapper for output Inversionmodel.invert()
+    '''
+    def wrapper(*args, **kwargs):
+        '''
+        m - InversionModel instance
+        x, y, w - see InversionModel
+        '''
+        stat_vars = ['chisqr', 'redchi', 'aic', 'bic']
+        fwd_model = args[0]._fwd_model.forward 
+        iop_model = args[0]._fwd_model.iop_model
+        # do inversion
+        out = func(*args, **kwargs)
+        # get estimates
+        x_hat = {i: float(j) for i,j in out.params.items()}
+        rrs_hat = fwd_model(**x_hat)
+        iop_hat = iop_model.get_iop(**x_hat)
+        # organize data in dict
+        data = {
+            'rrs': (['wavelength'], rrs_hat),
+            'iops': (['comp', 'iop', 'wavelength'], iop_hat),
+            'conc': (['comp'], [i for i in x_hat.values()]),
+            'weights': (['wavelength'], kwargs.get('w', np.repeat(1, len(rrs_hat))))}
+        # add stats
+        data.update({i: getattr(out, i) for i in stat_vars})   
+        # iop_hat = {k: v for k,v in zip(x_hat.keys(), iop_model.get_iop(**x_hat))}
+        # calculate standard-error
+        try:
+            data.update({'std_error': (['comp'], np.sqrt(getattr(out, 'covar').diagonal()))})
+        except AttributeError:
+            data.update({'std_error': (['comp'], np.repeat(np.nan, len(x_hat)))})
+        # set coordinates
+        coords = {
+            'wavelength': iop_model.wavebands,
+            'comp': [i for i in x_hat.keys()],
+            'iop': ['absorption', 'backscatter']}
+        
+        return Dataset(data, coords=coords)
+    
+    return wrapper
