@@ -1,4 +1,4 @@
-import warnings
+#import warnings
 import matplotlib.pyplot as plt
 import numpy as np
 import types
@@ -6,7 +6,7 @@ import pkg_resources
 from abc import ABC, abstractmethod
 from sklearn.preprocessing import PolynomialFeatures
 import pandas as pd
-from xarray import DataArray, Dataset
+from xarray import DataArray
 from hydropt.band_models import BandModel
 from hydropt.utils import der_2d_polynomial, recurse
 
@@ -28,6 +28,16 @@ def check_iop_dims(wavebands, **kwargs):
         raise ValueError('IOP model dimension do not match.')
 
     return n
+
+def update_lmfit_parameters(x):
+    x_in = list(x.params.values())
+    x_out = []
+    for i in x_in:
+        i.init_value = i.value
+        x_out.append(i)    
+    x.params.add_many(*x_out)
+        
+    return x.params
 
 class Interpolator:
     '''
@@ -62,7 +72,7 @@ class BioOpticalModel:
         self._wavebands = None
         self.iop_model = {}
         self.gradient = {}
-    
+ 
     @property
     def wavebands(self):
         return self._wavebands
@@ -78,7 +88,6 @@ class BioOpticalModel:
         elif ndims == 2:
             self.iop_model.update({k: v(None)[0] for (k, v) in kwargs.items()})
             self.gradient.update({k: v(None)[1] for (k, v) in kwargs.items()})
-
 
     def get_iop(self, **kwargs):
         iops = []
@@ -119,7 +128,6 @@ class BioOpticalModel:
             ax.legend()
 
         plt.tight_layout()
-
 class ReflectanceModel(ABC):
     ''' 
     rename ForwardModel -> ReflectanceModel
@@ -143,7 +151,6 @@ class ReflectanceModel(ABC):
     
     def plot(self):
         pass
-
 class ForwardModel:
     '''
     ...
@@ -172,7 +179,7 @@ class ForwardModel:
     def refl_model(self, m):
         self.__refl_model = m
         self.__cache = True
-    
+   
     def forward(self, **x):
         if self.__cache:
             self.refl_model = self.refl_model.interpolate(self.iop_model.wavebands)
@@ -180,8 +187,7 @@ class ForwardModel:
         iops = self.iop_model.sum_iop(**x)
         self._validate_bounds(x)      
         #for jax.jacfwd/jacrev uncomment line below
-        #return self.refl_model.forward(iops)
-        return pd.Series(self.refl_model.forward(iops), index=self.iop_model.wavebands)
+        return self.refl_model.forward(iops)
     
     def jacobian(self, **x):
         # init empty jacobian matrix
@@ -215,7 +221,6 @@ class PolynomialReflectance(ReflectanceModel):
         c = self._parameters.values
         x = np.log(x)
         # get polynomial features
-        #ft = PolynomialFeatures(degree=5).fit_transform(x.T)
         ft = self._polynomial_features(x.T)
         # calculate log(Rrs)
         log_rrs = np.dot(c, ft.T).diagonal()
@@ -241,88 +246,26 @@ class PolynomialReflectance(ReflectanceModel):
         f = np.array([(x[0]**i)*(x[1]**j) for (i,j) in self._powers]).T
 
         return f
-
 class PolynomialForward(ForwardModel):
     def __init__(self, iop_model):
         super().__init__(iop_model, PolynomialReflectance())
-
 
 def _residual(x, y, f, w):
     '''weighted residuals'''
     
     return (f(**x)-y)/(1/np.sqrt(w))
-
-
-class ValidationDataset:
-
-    def __init__(self, fwd_model):
-        self.fwd_model = fwd_model
-
-    def create(self, wt):
-        ''' create validation set
-
-        wt - str indicating watertype: c1, c2 etc..
-        '''
-
-        pass
-
-def _to_dataset(func):
-    '''
-    make this a validation set decorator
-
-    to do: take extra argument of observed concentration and calculate
-    rrs -> add noise -> invert using .invert() -> create validation set
-
-    let this function create the synthetic dataset and invert it -> return the validation set:
-    observed vs. predicted
-    '''
-    def wrapper(*args, **kwargs):
-        '''
-        m - InversionModel instance
-        x, y, w - see InversionModel
-        '''
-        stat_vars = ['chisqr', 'redchi', 'aic', 'bic']
-        fwd_model = args[0]._fwd_model.forward 
-        iop_model = args[0]._fwd_model.iop_model
-        # do inversion
-        out = func(*args, **kwargs)
-        # get estimates
-        x_hat = {i: float(j) for i,j in out.params.items()}
-        rrs_hat = fwd_model(**x_hat)
-        iop_hat = iop_model.get_iop(**x_hat)
-        # organize data in dict
-        data = {
-            'rrs': (['wavelength'], rrs_hat),
-            'iops': (['comp', 'iop', 'wavelength'], iop_hat),
-            'conc': (['comp'], [i for i in x_hat.values()]),
-            'weights': (['wavelength'], kwargs.get('w', np.repeat(1, len(rrs_hat))))}
-        # add stats
-        data.update({i: getattr(out, i) for i in stat_vars})   
-        # iop_hat = {k: v for k,v in zip(x_hat.keys(), iop_model.get_iop(**x_hat))}
-        # calculate standard-error
-        try:
-            data.update({'std_error': (['comp'], np.sqrt(getattr(out, 'covar').diagonal()))})
-        except AttributeError:
-            data.update({'std_error': (['comp'], np.repeat(np.nan, len(x_hat)))})
-        # set coordinates
-        coords = {
-            'wavelength': iop_model.wavebands,
-            'comp': [i for i in x_hat.keys()],
-            'iop': ['absorption', 'backscatter']}
-        
-        return Dataset(data, coords=coords)
-    
-    return wrapper
-
- 
 class InversionModel:
     def __init__(self, fwd_model, minimizer, loss=_residual, band_model='rrs'):
         self._fwd_model = fwd_model
         self._minimizer = minimizer
         self._loss = loss
         self._band_model = BandModel(band_model)
+        self._x0 = None
 
-    @_to_dataset
+    @property
+    def iop_model(self):
+        return self._fwd_model.iop_model.iop_model
+
     def invert(self, y, x, w=1, jac=False):
         ''' 
         x - initial guess
@@ -342,11 +285,22 @@ class InversionModel:
         args = self._band_model((y, self._fwd_model.forward))
         # do optimization
         xhat = self._minimizer(loss_fun, x, args=args, Dfun=jac_fun)
-        warnings.warn('''no band transformation is applied to jacobian -
-         o.k. when band_model = 'rrs' ''')
-        
+        # warnings.warn('''no band transformation is applied to jacobian -
+        #  o.k. when band_model = 'rrs' ''')
         return xhat
 
-    @property
-    def iop_model(self):
-        return self._fwd_model.iop_model.iop_model
+    def invert_scene(self, y, x, axes=0, update_guess=False, **kwargs):
+        self._x0 = x
+        def apply_invert(y):
+            if np.isnan(y).any():
+                v_array = np.repeat(np.nan, len(x))
+            else:        
+                xhat = self.invert(y, x=self._x0, **kwargs)
+                if update_guess:
+                # update initial guess
+                    self._x0 = update_lmfit_parameters(xhat)
+                v_array = [i for i in xhat.params.valuesdict().values()]
+            
+            return v_array
+
+        return np.apply_along_axis(apply_invert, axes, y)
