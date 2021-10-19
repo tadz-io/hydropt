@@ -1,6 +1,7 @@
 import warnings
 import itertools
 import numpy as np
+from xarray import Dataset
 
 def interpolate_to_wavebands(data, wavelength, index='wavelength'):
     '''
