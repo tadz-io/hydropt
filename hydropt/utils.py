@@ -112,3 +112,19 @@ def to_xarray_dataset(func):
         return Dataset(data, coords=coords)
     
     return wrapper
+
+def update_lmfit_parameters(x):
+    x_in = list(x.params.values())
+    x_out = []
+    for i in x_in:
+        i.init_value = i.value
+        x_out.append(i)    
+    x.params.add_many(*x_out)
+    
+    return x.params
+
+def lmfit_results_to_array(x, parameters=[]):
+    p_list = ['params'].extend(parameters)
+    x_array = np.hstack(np.array([np.array(getattr(x, i)) for i in p_list]))
+    
+    return x_array
