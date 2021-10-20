@@ -8,7 +8,7 @@ from sklearn.preprocessing import PolynomialFeatures
 import pandas as pd
 from xarray import DataArray
 from hydropt.band_models import BandModel
-from hydropt.utils import der_2d_polynomial, recurse
+from hydropt.utils import der_2d_polynomial, recurse, update_lmfit_parameters, lmfit_results_to_array
 
 PACE_POLYNOM_04_H2O_STREAM = pkg_resources.resource_filename('hydropt', 'data/PACE_polynom_04_h2o.csv')
 PACE_POLYNOM_04_H2O = pd.read_csv(PACE_POLYNOM_04_H2O_STREAM, index_col=0)
@@ -28,16 +28,6 @@ def check_iop_dims(wavebands, **kwargs):
         raise ValueError('IOP model dimension do not match.')
 
     return n
-
-def update_lmfit_parameters(x):
-    x_in = list(x.params.values())
-    x_out = []
-    for i in x_in:
-        i.init_value = i.value
-        x_out.append(i)    
-    x.params.add_many(*x_out)
-        
-    return x.params
 
 class Interpolator:
     '''
@@ -299,7 +289,7 @@ class InversionModel:
                 if update_guess:
                 # update initial guess
                     self._x0 = update_lmfit_parameters(xhat)
-                v_array = [i for i in xhat.params.valuesdict().values()]
+                v_array = lmfit_results_to_array(xhat)
             
             return v_array
 
