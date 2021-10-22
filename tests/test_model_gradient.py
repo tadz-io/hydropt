@@ -1,8 +1,12 @@
 import unittest
 import numpy as np
 from hydropt.hydropt import PolynomialForward, PolynomialReflectance, BioOpticalModel
-from jax import jacfwd
+#from jax import jacfwd
 from hydropt.bio_optics import clear_nat_water, phyto, HSI_WBANDS
+
+def jacfwd(x):
+    '''dummy function'''
+    pass
 
 bio_opt_model = BioOpticalModel()
 bio_opt_model.set_iop(
