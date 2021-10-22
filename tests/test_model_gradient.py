@@ -4,7 +4,7 @@ from hydropt.hydropt import PolynomialForward, PolynomialReflectance, BioOptical
 #from jax import jacfwd
 from hydropt.bio_optics import clear_nat_water, phyto, HSI_WBANDS
 
-def jacfwd(x):
+def jacfwd(x, *args, **kwargs):
     '''dummy function'''
     pass
 
