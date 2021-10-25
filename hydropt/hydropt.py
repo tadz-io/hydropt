@@ -118,6 +118,7 @@ class BioOpticalModel:
             ax.legend()
 
         plt.tight_layout()
+
 class ReflectanceModel(ABC):
     ''' 
     rename ForwardModel -> ReflectanceModel
@@ -141,6 +142,7 @@ class ReflectanceModel(ABC):
     
     def plot(self):
         pass
+
 class ForwardModel:
     '''
     ...
@@ -199,7 +201,6 @@ class ForwardModel:
     def _validate_bounds(self, x):
         pass
 
-
 class PolynomialReflectance(ReflectanceModel):
 
     _parameters = DataArray(PACE_POLYNOM_04_H2O)
@@ -236,6 +237,7 @@ class PolynomialReflectance(ReflectanceModel):
         f = np.array([(x[0]**i)*(x[1]**j) for (i,j) in self._powers]).T
 
         return f
+
 class PolynomialForward(ForwardModel):
     def __init__(self, iop_model):
         super().__init__(iop_model, PolynomialReflectance())
@@ -244,6 +246,7 @@ def _residual(x, y, f, w):
     '''weighted residuals'''
     
     return (f(**x)-y)/(1/np.sqrt(w))
+    
 class InversionModel:
     def __init__(self, fwd_model, minimizer, loss=_residual, band_model='rrs'):
         self._fwd_model = fwd_model
