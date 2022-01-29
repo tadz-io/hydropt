@@ -1,7 +1,48 @@
 import warnings
 import itertools
 import numpy as np
+from numpy.lib.index_tricks import ndindex
 from xarray import Dataset
+
+def apply_along_axis(func1d, axis, arr, progress_bar=None, *args, **kwargs):
+    '''
+    Modified from numpy's apply_along_axis function
+    '''
+    nd = arr.ndim
+    # arr, with the iteration axis at the end
+    in_dims = list(range(nd))
+    inarr_view = np.transpose(arr, in_dims[:axis] + in_dims[axis+1:] + [axis])
+    # compute indices for the iteration axes
+    inds = iter(ndindex(inarr_view.shape[:-1]))
+    # invoke the function on the first item
+    try:
+        ind0 = next(inds)
+    except StopIteration as e:
+        raise ValueError(
+            'Cannot apply_along_axis when any iteration dimensions are 0'
+        ) from None
+    res = func1d(inarr_view[ind0], *args, **kwargs)
+    # build a buffer for storing evaluations of func1d.
+    # remove the requested axis, and add the new ones on the end.
+    # laid out so that each write is contiguous.
+    # for a tuple index inds, buff[inds] = func1d(inarr_view[inds])
+    buff = np.zeros(inarr_view.shape[:-1] + res.shape, res.dtype)
+    # permutation of axes such that out = buff.transpose(buff_permute)
+    buff_dims = list(range(buff.ndim))
+    buff_permute = (
+        buff_dims[0 : axis] +
+        buff_dims[buff.ndim-res.ndim : buff.ndim] +
+        buff_dims[axis : buff.ndim-res.ndim]
+    ) 
+    # save the first result, then compute and save all remaining results
+    buff[ind0] = res
+    if progress_bar:
+        inds = progress_bar(list(inds))
+    for ind in inds:
+        buff[ind] = func1d(inarr_view[ind], *args, **kwargs)
+
+    # finally, rotate the inserted axes back to where they belong
+    return np.transpose(buff, buff_permute)
 
 def interpolate_to_wavebands(data, wavelength, index='wavelength'):
     '''
