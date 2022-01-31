@@ -8,7 +8,7 @@ from sklearn.preprocessing import PolynomialFeatures
 import pandas as pd
 from xarray import DataArray
 from hydropt.band_models import BandModel
-from hydropt.utils import der_2d_polynomial, recurse, update_lmfit_parameters, lmfit_results_to_array
+from hydropt.utils import der_2d_polynomial, recurse, apply_along_axis, update_lmfit_parameters, lmfit_results_to_array
 
 PACE_POLYNOM_04_H2O_STREAM = pkg_resources.resource_filename('hydropt', 'data/PACE_polynom_04_h2o.csv')
 PACE_POLYNOM_04_H2O = pd.read_csv(PACE_POLYNOM_04_H2O_STREAM, index_col=0)
@@ -53,7 +53,6 @@ class Interpolator:
     def __get__(self, instance, owner):
         return types.MethodType(self, instance) if instance else self
         
-
 class WavebandError(ValueError):
     pass
 
@@ -246,7 +245,7 @@ def _residual(x, y, f, w):
     '''weighted residuals'''
     
     return (f(**x)-y)/(1/np.sqrt(w))
-    
+
 class InversionModel:
     def __init__(self, fwd_model, minimizer, loss=_residual, band_model='rrs'):
         self._fwd_model = fwd_model
@@ -259,14 +258,12 @@ class InversionModel:
     def iop_model(self):
         return self._fwd_model.iop_model.iop_model
 
-    def invert(self, y, x, w=1, jac=False):
+    def invert(self, y, x, w=1, jac=False, **kwargs):
         ''' 
         x - initial guess
         y - rrs to invert
         w - weights to wavebands
         jac - use analytical expression of jacobian if available
-
-        https://stackoverflow.com/questions/51883058/l1-norm-instead-of-l2-norm-for-cost-function-in-regression-model
         '''
         loss_fun = lambda x, y, f: self._loss(dict(x.valuesdict()), y, f, w)
         if jac:
@@ -277,12 +274,12 @@ class InversionModel:
         # apply band-transformation on y and model
         args = self._band_model((y, self._fwd_model.forward))
         # do optimization
-        xhat = self._minimizer(loss_fun, x, args=args, Dfun=jac_fun)
+        xhat = self._minimizer(loss_fun, x, args=args, Dfun=jac_fun, **kwargs)
         # warnings.warn('''no band transformation is applied to jacobian -
         #  o.k. when band_model = 'rrs' ''')
         return xhat
 
-    def invert_scene(self, y, x, axes=0, update_guess=False, **kwargs):
+    def invert_scene(self, y, x, axes=0, update_guess=False, pbar=None, **kwargs):
         self._x0 = x
         def apply_invert(y):
             if np.isnan(y).any():
@@ -296,4 +293,4 @@ class InversionModel:
             
             return v_array
 
-        return np.apply_along_axis(apply_invert, axes, y)
+        return apply_along_axis(apply_invert, axis=axes, arr=y, progress_bar=pbar)
