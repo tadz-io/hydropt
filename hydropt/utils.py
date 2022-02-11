@@ -2,12 +2,18 @@ import warnings
 import itertools
 import numpy as np
 from numpy.lib.index_tricks import ndindex
-from xarray import Dataset
+
+class LmfitResultsToArray:
+    def __init__(self, results):
+        for k,v in results.__dict__.items():
+            setattr(self, k, v)
 
 def apply_along_axis(func1d, axis, arr, progress_bar=None, *args, **kwargs):
     '''
     Modified from numpy's apply_along_axis function
     '''
+    # add arr = np.asanyarray()
+    # check if type(axis) == str
     nd = arr.ndim
     # arr, with the iteration axis at the end
     in_dims = list(range(nd))
@@ -88,8 +94,10 @@ def der_2d_polynomial(x, c, p):
     # evaluate terms at [x]
     ft = np.array([[d_x1(x,p), d_x2(x,p)] for (x,p) in zip(itertools.cycle([x.T]), p)])
     # dot derivative matrix with polynomial coefficients and get diagonal
-    dx = np.array([np.dot(c,ft[:,0,:]).diagonal(), np.dot(c,ft[:,1,:]).diagonal()])
-    
+    dx = np.array([
+        np.dot(c, ft[:,0,:]).diagonal(),
+        np.dot(c, ft[:,1,:]).diagonal()])
+
     return dx
 
 def recurse(x, f_args=np.nan):
@@ -111,48 +119,6 @@ def recurse(x, f_args=np.nan):
     out = inner(x)
 
     return np.array(out)
-
-def to_xarray_dataset(func):
-    '''
-    wrapper for output Inversionmodel.invert()
-    '''
-    def wrapper(*args, **kwargs):
-        '''
-        m - InversionModel instance
-        x, y, w - see InversionModel
-        '''
-        stat_vars = ['chisqr', 'redchi', 'aic', 'bic']
-        fwd_model = args[0]._fwd_model.forward 
-        iop_model = args[0]._fwd_model.iop_model
-        # do inversion
-        out = func(*args, **kwargs)
-        # get estimates
-        x_hat = {i: float(j) for i,j in out.params.items()}
-        rrs_hat = fwd_model(**x_hat)
-        iop_hat = iop_model.get_iop(**x_hat)
-        # organize data in dict
-        data = {
-            'rrs': (['wavelength'], rrs_hat),
-            'iops': (['comp', 'iop', 'wavelength'], iop_hat),
-            'conc': (['comp'], [i for i in x_hat.values()]),
-            'weights': (['wavelength'], kwargs.get('w', np.repeat(1, len(rrs_hat))))}
-        # add stats
-        data.update({i: getattr(out, i) for i in stat_vars})   
-        # iop_hat = {k: v for k,v in zip(x_hat.keys(), iop_model.get_iop(**x_hat))}
-        # calculate standard-error
-        try:
-            data.update({'std_error': (['comp'], np.sqrt(getattr(out, 'covar').diagonal()))})
-        except AttributeError:
-            data.update({'std_error': (['comp'], np.repeat(np.nan, len(x_hat)))})
-        # set coordinates
-        coords = {
-            'wavelength': iop_model.wavebands,
-            'comp': [i for i in x_hat.keys()],
-            'iop': ['absorption', 'backscatter']}
-        
-        return Dataset(data, coords=coords)
-    
-    return wrapper
 
 def update_lmfit_parameters(x):
     x_in = list(x.params.values())
