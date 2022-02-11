@@ -282,6 +282,7 @@ class InversionModel:
     def invert_scene(self, y, x, axes=0, update_guess=False, pbar=None, **kwargs):
         self._x0 = x
         def apply_invert(y):
+            # to do: see nan_policy lmfit.minimize()
             if np.isnan(y).any():
                 v_array = np.repeat(np.nan, len(x))
             else:        
