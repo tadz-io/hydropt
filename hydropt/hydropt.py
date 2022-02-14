@@ -279,7 +279,7 @@ class InversionModel:
         #  o.k. when band_model = 'rrs' ''')
         return xhat
 
-    def invert_scene(self, y, x, axes=0, update_guess=False, pbar=None, **kwargs):
+    def invert_scene(self, y, x, axes=0, update_guess=False, pbar=None, stats=[], **kwargs):
         self._x0 = x
         def apply_invert(y):
             # to do: see nan_policy lmfit.minimize()
@@ -290,7 +290,7 @@ class InversionModel:
                 if update_guess:
                 # update initial guess
                     self._x0 = update_lmfit_parameters(xhat)
-                v_array = lmfit_results_to_array(xhat)
+                v_array = lmfit_results_to_array(xhat, parameters=stats)
             
             return v_array
 
