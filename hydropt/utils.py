@@ -140,7 +140,7 @@ def lmfit_results_to_array(x, parameters=[]):
             std[:] = np.nan
         x.std = std
     p_list.extend(parameters)
-    x_array = np.hstack(np.array([np.array(getattr(x, i)) for i in p_list]))
+    x_array = np.hstack([np.array(getattr(x, i)) for i in p_list])
     
     return x_array
 
