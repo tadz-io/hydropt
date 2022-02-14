@@ -132,7 +132,25 @@ def update_lmfit_parameters(x):
 
 def lmfit_results_to_array(x, parameters=[]):
     p_list = ['params']
+    if 'std' in parameters:
+        try:
+            std = standard_error(x.covar)
+        except AttributeError:
+            std = np.empty(len(x.params))
+            std[:] = np.nan
+        x.std = std
     p_list.extend(parameters)
     x_array = np.hstack(np.array([np.array(getattr(x, i)) for i in p_list]))
     
     return x_array
+
+def standard_error(cov):
+    '''
+    Calculate standard error from covariance matrix
+    
+    Args:
+        cov: nxn covariance matrix
+    Returns:
+        standard error as a 1xn array
+    '''
+    return np.sqrt(cov.diagonal())
