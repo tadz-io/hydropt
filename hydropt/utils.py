@@ -58,15 +58,12 @@ def interpolate_to_wavebands(data, wavelength, index='wavelength'):
     data.reset_index(inplace=True)
     # add OLCI/MERIS wavebands to phytop SIOP wavelengths
     wband_merge = np.unique(sorted(np.append(data[index], wavelength)))
-
+    # reindex and interpolate
     data.set_index(index, inplace=True)
-    #.interpolate(method='slinear', fill_value=0, limit_direction='both')\
     data = data.reindex(wband_merge)\
         .astype(float)\
         .interpolate()\
         .reindex(wavelength)
-
-    warnings.warn('changed interpolation method')
 
     return data
 
