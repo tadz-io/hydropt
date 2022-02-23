@@ -284,7 +284,11 @@ class InversionModel:
         def apply_invert(y):
             # to do: see nan_policy lmfit.minimize()
             if np.isnan(y).any():
-                v_array = np.repeat(np.nan, len(x))
+                if 'std' in stats:
+                    nvar = 2*len(x)+len(stats)-1
+                else:
+                    nvar = len(x)+len(stats)
+                v_array = np.repeat(np.nan, nvar)
             else:        
                 xhat = self.invert(y, x=self._x0, **kwargs)
                 if update_guess:
