@@ -72,7 +72,7 @@ class TestFuncLmfitResultsArray(unittest.TestCase):
         self.minimizer_result = minimizer.MinimizerResult(**lmfit_result_kws)
     
     def test_stats(self):
-        arr = lmfit_results_to_array(self.minimizer_result, parameters=[])
+        arr = lmfit_results_to_array(self.minimizer_result, parameters=['aic','bic','chisqr','redchi'])
 
 if __name__ == '__main__':
     unittest.main()
