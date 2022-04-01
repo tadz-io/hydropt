@@ -132,15 +132,15 @@ rrs = fwd_model.forward(phyto=.15, cdom=.02)
 
 Lets invert the R<sub>rs</sub> spectrum we just calculated with the specified forward model ```fwd_model```. At this point HYDROPT only supports the Levenberg-Marquardt routine from the ```LMFIT``` library (```lmfit.minimize```). Please refer to the [LMFIT documentation](https://lmfit.github.io/lmfit-py/) for more information. 
 
-Specify an initial guess for the phytoplankton concentration and CDOM absorption used for the Levenberg-Marquardt routine. 
+Specify an initial guess for the phytoplankton concentration and CDOM absorption used for the Levenberg-Marquardt routine. Lower bounds should be set for all retrieval parameters. HYDROPT is not able to handle negative or zero values due to log-transformations. Lower bounds should be greater than zero.
 
 ```python
 import lmfit
 # set initial guess parameters for LM
 x0 = lmfit.Parameters()
 # some initial guess
-x0.add('phyto', value=.5)
-x0.add('cdom', value=.01)
+x0.add('phyto', value=.5,  min=1E-9)
+x0.add('cdom', value=.01, min=1E-9)
 ```
 Now invert R<sub>rs</sub> to retrieve the concentration and absorption of phytoplankton and CDOM respectively:
 
