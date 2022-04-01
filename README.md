@@ -108,7 +108,7 @@ The IOPs of all optical components should be specified at the same wavebands. No
 ```python
 bio_opt = hd.BioOpticalModel()
 # set optical models
-bio_opt.set_iops(
+bio_opt.set_iop(
     wavebands=wavebands,
     water=clear_nat_water,
     phyto=phytoplankton,
